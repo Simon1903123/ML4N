@@ -365,15 +365,15 @@ Why not simply map the categories to integers (San Francisco $=1$, New York $=2$
     \small
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|l|p{4.6cm}|p{4.6cm}|}
-    \hline
-     & \textbf{PROS} & \textbf{CONS} \\
-    \hline
-    \textbf{One-Hot} & each feature clearly corresponds to one category; missing data can be encoded as the all-zeros vector; the intercept of a linear model represents the overall mean of the target variable & redundant ($k$ bits for $k-1$ degrees of freedom): the linear model has no unique solution \\
-    \hline
-    \textbf{Dummy} & not redundant ($k-1$ bits): the solution is unique; the intercept is the mean of the target for the reference category & cannot easily handle missing data, since the all-zeros vector is already used by the reference category \\
-    \hline
-    \textbf{Effect} & not redundant; the reference category uses a different code ($-1$s), so the all-zeros vector is free for missing data; the intercept represents the overall mean & the vector of all $-1$s is dense (not sparse), which is expensive for both storage and computation \\
-    \hline
+        \hline
+        & \textbf{PROS} & \textbf{CONS} \\
+        \hline
+        \textbf{One-Hot} & each feature clearly corresponds to one category; missing data can be encoded as the all-zeros vector; the intercept of a linear model represents the overall mean of the target variable & redundant ($k$ bits for $k-1$ degrees of freedom): the linear model has no unique solution \\
+        \hline
+        \textbf{Dummy} & not redundant ($k-1$ bits): the solution is unique; the intercept is the mean of the target for the reference category & cannot easily handle missing data, since the all-zeros vector is already used by the reference category \\
+        \hline
+        \textbf{Effect} & not redundant; the reference category uses a different code ($-1$s), so the all-zeros vector is free for missing data; the intercept represents the overall mean & the vector of all $-1$s is dense (not sparse), which is expensive for both storage and computation \\
+        \hline
     \end{tabular}
 \end{center}
 
@@ -472,3 +472,143 @@ The following example shows how one sentence changes at each step:
     where $N$ is the number of documents and $\text{df}(t)$ is the number of documents containing term $t$. A term that appears in every document gets weight $\log 1 = 0$, because it does not help to distinguish documents. In the example ($N=3$, natural logarithm), ``bark'' appears only in $D_2$, so its weight is $1\cdot\log 3\approx1.10$, while ``dog'' appears in two documents and gets $2\cdot\log 1.5\approx0.81$ in $D_2$, even though it occurs twice.
 \end{itemize}
 
+
+\section{A prova di coglione}
+
+\subsection*{Attributi e dati}
+Un \textbf{attributo} è una caratteristica (es.\ l'altezza), il \textbf{valore} è il modo in cui la misuriamo (metri o piedi). Lo stesso attributo può avere valori diversi, e attributi diversi possono avere gli stessi valori (ID ed età sono entrambi interi).
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Tipo} & \textbf{Cosa posso fare} & \textbf{Esempio} \\
+\midrule
+Nominale & solo dire se sono uguali ($=$) & colore degli occhi, ID \\
+Ordinale & uguali e ordinarli ($<,=,>$) & voti, taglie S/M/L \\
+Discreto & pochi valori, spesso interi (binario = caso speciale) & conteggi, 0/1 \\
+Continuo & numeri reali & altezza, temperatura \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent I dati possono essere \textbf{tabelle}, \textbf{documenti} (testo), \textbf{grafi} (il Web) o \textbf{dati ordinati} (serie temporali, genoma).
+
+\paragraph*{Qualità.} Ogni dataset ha dei difetti:
+\begin{itemize}
+    \item \textbf{Rumore}: valori alterati a caso (es.\ errori di misura). \textbf{Outlier}: oggetti molto diversi dagli altri; a volte disturbano, a volte sono proprio ciò che cerchiamo.
+    \item \textbf{Valori mancanti}: si eliminano, si stimano o si ignorano.
+    \item \textbf{Duplicati}: tipici quando si uniscono più fonti; vanno ripuliti.
+\end{itemize}
+
+\subsection*{Similarità e distanza}
+La \textbf{dissimilarità} $d$ vale $0$ se due oggetti sono identici e cresce quanto più sono diversi. La \textbf{similarità} $s$ fa l'opposto: di solito sta in $[0,1]$ e vale $1$ per oggetti identici.
+
+\paragraph*{Un solo attributo.}
+\begin{itemize}
+    \item \textbf{Nominale}: o uguali ($d=0$) o diversi ($d=1$), senza vie di mezzo.
+    \item \textbf{Ordinale}: si numerano i valori da $0$ a $n-1$ e $d=\frac{|x-y|}{n-1}$, $s=1-d$. Con \{poor, fair, good, excellent\}: $d(\text{poor},\text{good})=2/3$. Si assume che i ``gradini'' siano tutti uguali.
+    \item \textbf{Numerico}: $d=|x-y|$. Per la similarità: $s=-d$, $s=\frac{1}{1+d}$, $s=e^{-d}$ oppure min-max. Con $d=2$: $-2$, $0.33$, $0.14$.
+\end{itemize}
+
+\paragraph*{Più attributi: Minkowski.} Ogni oggetto è un punto in $n$ dimensioni e
+\[
+d(\mathbf{x},\mathbf{y})=\Big(\sum_{k=1}^{n}|x_k-y_k|^r\Big)^{1/r}
+\]
+Il parametro $r$ (scelto da noi, non è $n$) decide come combinare le differenze:
+$r=1$ \textbf{Manhattan} (somma delle differenze, come camminare tra isolati),
+$r=2$ \textbf{Euclidea} (linea retta),
+$r\to\infty$ \textbf{Chebyshev} (solo la differenza più grande).
+Esempio: $\mathbf{x}=(1,1)$, $\mathbf{y}=(4,5)$, differenze $3$ e $4$ $\Rightarrow$ $L_1=7$, $L_2=5$, $L_\infty=4$.
+Se gli attributi hanno scale diverse (euro vs anni) vince quello con i numeri più grandi: prima si \textbf{standardizza}.
+
+\paragraph*{Quando una distanza è una metrica.} Deve rispettare: $d(x,x)=0$; $d(x,y)>0$ se $x\neq y$; $d(x,y)=d(y,x)$; e la \textbf{disuguaglianza triangolare} $d(x,z)\le d(x,y)+d(y,z)$ (la strada diretta non è mai più lunga di una deviazione). Minkowski è una metrica solo per $r\ge1$: con $r=0.5$, $x=(0,0)$, $y=(1,0)$, $z=(1,1)$ si ottiene $d(x,z)=4 > 1+1$.
+
+\paragraph*{Mahalanobis.} Idea: \emph{una differenza pesa tanto quanto è insolita}.
+\[
+d(\mathbf{x},\mathbf{y})=\sqrt{(\mathbf{x}-\mathbf{y})^\top S^{-1}(\mathbf{x}-\mathbf{y})}
+\]
+dove $S$ è la matrice di covarianza. Dove i dati variano molto, una differenza conta poco; dove variano poco, conta molto. Tiene conto anche delle correlazioni, così le informazioni ripetute non contano due volte. Non dipende dalle unità di misura. Se $S=I$ torna la distanza euclidea; se $S$ è diagonale equivale all'euclidea su dati standardizzati.
+Esempio con varianze $4$ e $1$: la differenza $(2,0)$ dà $d=1$, la differenza $(0,2)$ dà $d=2$. Stessa distanza euclidea, ma la seconda è più ``strana''.
+
+\subsection*{Preprocessing}
+I dati reali sono sporchi, enormi, con troppi attributi o non numerici. Il preprocessing li rende puliti, compatti e utilizzabili.
+
+\paragraph*{Aggregazione.} Più valori diventano uno solo (somma o media): giorni $\to$ mesi, città $\to$ regioni. Si ottengono meno dati, una visione d'insieme e valori più stabili (nella media le oscillazioni si compensano). Si perde però il dettaglio.
+
+\paragraph*{Riduzione.} Un dataset più piccolo che dà quasi gli stessi risultati: \textbf{meno righe} (campionamento), \textbf{meno colonne} (selezione delle feature), \textbf{meno valori} (discretizzazione).
+
+\paragraph*{Campionamento.} Si analizza solo una parte dei dati, che deve essere \textbf{rappresentativa} (stesse medie, stesse proporzioni delle classi).
+\textbf{Casuale semplice}: tutti hanno la stessa probabilità, ma una classe rara può sparire per caso.
+\textbf{Stratificato}: si campiona da ogni gruppo in proporzione alla sua dimensione, così nessuna classe si perde.
+
+\paragraph*{Maledizione della dimensionalità.} Con tante dimensioni lo spazio diventa enorme e i dati \textbf{vuoti e sparsi}. Per prendere il 10\% dei dati in un cubo serve un lato di $0.1$ in 1D, ma di $0.79$ in 10D: il ``vicino'' non è più vicino. Inoltre tutti i punti diventano quasi equidistanti, quindi distanza e densità (base di clustering e outlier detection) perdono senso.
+
+\paragraph*{Selezione delle feature.} Si tolgono feature \textbf{ridondanti} (prezzo con e senza IVA) e \textbf{irrilevanti} (la matricola per prevedere il voto). Metodi:
+\begin{itemize}
+    \item \textbf{RFE}: addestro il modello, elimino la feature meno importante, riaddestro, ripeto fino al numero voluto. Si riaddestra ogni volta perché le importanze cambiano; per questo è lento con molte feature.
+    \item \textbf{Modelli interpretabili}: alberi di decisione e regressione lineare dicono già quanto pesa ogni feature.
+    \item \textbf{PCA/SVD}: non scelgono feature, ne \emph{creano} di nuove combinando le originali; poche componenti contengono quasi tutta l'informazione.
+\end{itemize}
+
+\paragraph*{Feature engineering.} Trasformare i dati grezzi nella forma più utile al modello: spesso conta più dell'algoritmo. Dati strutturati $\to$ normalizzazione, discretizzazione, binarizzazione; testo, immagini, segnali $\to$ tokenizzazione, Fourier, descrittori.
+
+\paragraph*{Trasformazione.} Cambiare rappresentazione per far emergere l'informazione. Esempio: la \textbf{trasformata di Fourier} trasforma un segnale di 1000 valori nel tempo in due soli picchi di frequenza.
+
+\paragraph*{Discretizzazione.} Da continuo a categorie ordinate: età $\to$ \{giovane, adulto, anziano\}. Più facile da interpretare, ma si perde dettaglio.
+\textbf{Equal width}: intervalli della stessa ampiezza (semplice, sensibile agli outlier).
+\textbf{Equal frequency}: stesso numero di punti per intervallo.
+\textbf{Clustering}: tagli tra i gruppi naturali (es.\ k-means).
+
+\paragraph*{Binarizzazione.} Le categorie diventano bit. Non si usano numeri (SF=1, NY=2, Seattle=3) perché inventerebbero un ordine che non esiste.
+\begin{center}
+    \small
+    \begin{tabular}{@{}l|ccc|cc|cc@{}}
+        \toprule
+        & \multicolumn{3}{c|}{\textbf{One-hot}} & \multicolumn{2}{c|}{\textbf{Dummy}} & \multicolumn{2}{c}{\textbf{Effect}} \\
+        \midrule
+        San Francisco & 1 & 0 & 0 & 1 & 0 & 1 & 0 \\
+        New York      & 0 & 1 & 0 & 0 & 1 & 0 & 1 \\
+        Seattle       & 0 & 0 & 1 & 0 & 0 & $-1$ & $-1$ \\
+        \bottomrule
+    \end{tabular}
+\end{center}
+
+Il \textbf{one-hot} usa $k$ bit, ma uno è inutile: se i primi due sono $0$, la città è per forza Seattle. Questo confonde i modelli lineari (nessuna soluzione unica). \textbf{Dummy} ed \textbf{effect} usano $k-1$ bit e risolvono il problema.
+In breve: \emph{one-hot} è chiaro e gestisce i mancanti (vettore nullo) ma è ridondante; \emph{dummy} non è ridondante ma il vettore nullo è già occupato; \emph{effect} risolve entrambi, ma i $-1$ rendono i dati densi e costosi.
+
+\paragraph*{Normalizzazione.} Rende confrontabili scale diverse (età 20--70 vs reddito 20\,000--100\,000).
+\begin{itemize}
+    \item \textbf{Min-max}: $x'=\frac{x-x_{\min}}{x_{\max}-x_{\min}}\in[0,1]$. Un outlier però schiaccia tutti gli altri valori verso $0$.
+    \item \textbf{Z-score}: $x'=\frac{x-\mu}{\sigma}$, cioè ``a quante deviazioni standard dalla media''. Gli outlier restano visibili.
+\end{itemize}
+Media, min e max si calcolano \textbf{solo sul training set}.
+
+\paragraph*{Documenti.} Il testo va trasformato in numeri in cinque passi:
+\begin{center}
+    \small
+    \texttt{The cats are running in the garden.}
+    $\xrightarrow{\text{token}}$ \texttt{[The, cats, are, running, in, the, garden]}\\[2pt]
+    $\xrightarrow{\text{minuscolo}}$ \texttt{[the, cats, \dots]}
+    $\xrightarrow{\text{via stopword}}$ \texttt{[cats, running, garden]}
+    $\xrightarrow{\text{stemming}}$ \texttt{[cat, run, garden]}
+    \end{center}
+    (il primo passo, lo \emph{splitting}, divide il testo in frasi o paragrafi). Poi ogni documento diventa un vettore che conta le parole (\textbf{bag of words}), ignorandone l'ordine:
+    \begin{center}
+    \small
+    \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    & bark & cat & dog & garden & run \\
+    \midrule
+    $D_1$: The cats are running in the garden & 0 & 1 & 0 & 1 & 1 \\
+    $D_2$: The dog runs and the dog barks & 1 & 0 & 2 & 0 & 1 \\
+    $D_3$: A dog and a cat in the garden & 0 & 1 & 1 & 1 & 0 \\
+    \bottomrule
+    \end{tabular}
+\end{center}
+
+I pesi possono essere \textbf{binari} (c'è o no), \textbf{TF} (quante volte) o \textbf{TF-IDF}, che premia le parole rare:
+\[
+\text{tf-idf}(t,d)=\text{tf}(t,d)\cdot\log\frac{N}{\text{df}(t)}
+\]
+Una parola presente in tutti i documenti pesa $0$, perché non aiuta a distinguerli. Nell'esempio ``bark'' vale $\log 3\approx1.10$, mentre ``dog'' vale solo $0.81$ pur comparendo due volte.

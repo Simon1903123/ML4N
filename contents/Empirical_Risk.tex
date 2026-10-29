@@ -1,0 +1,109 @@
+\chapter{Empirical Risk}
+
+As we already stated, ML aims at learning a hypothesis h such that h(x) is similar to y for any data point (x,y). In this sense, data points need to be interpreted as realization of i.i.d. RVs with probability distribution p(x,y). Additionally, it is needed to defined the loss incurred for any point as \textbf{expected loss}. To compute the expected loss, also defined as expected risk, we need to know the probability distribution p(x,y) of datapoints (x,y), since we want to minimize the expected loss.\\
+The idea is to compute the empirical risk by approximating the expected loss by average loss on data points (on training set).
+
+\section{Empirical Risk Minimization}
+
+The Empirical Risk Minimization learns a hypothesis out of a hypothesis space that incurs in \textbf{minimum average loss} when predicting \textbf{labels} of training datapoints based on their \textbf{features}. It is important to note that this is performed on the training data points.
+
+ERM works on learning the optimal parameter vector, in order to learn a \textbf{hypothesis in model} that incurs in \textbf{smallest empirical risk}, which is our loss, when predicting labels of \textbf{training data points}.
+
+\section{ERM for regression}
+
+It is important to define the difference between Regression and Classification tasks:
+\begin{itemize}
+    \item Regression: the end-goal is to predict numeric labels, hence continuous values. The loss functions for regression tasks are obtained from distance between numbers.
+    \item Classification: the end-goal is to predict discrete-valued labels either in a binary classification or in a multi-class classification. The loss functions are obtained from confidence measures.
+\end{itemize}
+
+\subsection{Linear Regression}
+
+Linear regression characteristics:
+\begin{itemize}
+    \item Data: data points are characterized by \textbf{numeric feature vector} and \textbf{numeric label}.
+    \item Model: different \textbf{linear hypothesis maps}.
+    \item Loss: \textbf{squared error loss}
+\end{itemize}
+
+The \textbf{Polynomial Regression} is defined as the space where we combine x, the features, to a different power up to degree n. This results in an enlargement of the model from a linear one to polynomial function h. The Polynomial Regression is a linear regression with feature transformation, from feature map to linear map.
+
+\subsection{Loss Functions for regression}
+
+In order to find the best model we need to measure the error via a loss function. There are different loss functions:
+\begin{itemize}
+    \item Squared Error Loss
+    \item Absolute Error Loss
+    \item Huber Loss
+\end{itemize}
+
+\subsection{Squared Error Loss}
+
+The squared error loss is a loss function for regression tasks. It is defined as follows:
+\[
+L := (\widehat{y} - y)^2
+\]
+
+The Squared Error Loss tries to minimize the squared distance, hence it is sensitive and strongly dependent to single outliers, as it forces the predictor towards the single outlier. It performs good when there are not outliers.
+
+\subsection{Absolute Error Loss}
+
+The Absolute Error Loss is a loss function for regression tasks. It is defined as follows:
+\[
+L := |\widehat{y} - y|
+\]
+
+The Absolute Error Loss tolerates few outliers, since it minimizes the absolute error, not the squared one which weights a lot for outliers. But it has a non-derivability point, which is not positive as in that point the gradient doesn't know which direction to take in order to minimize it.
+
+\subsection{Huber Loss}
+
+The Huber Loss is a loss function for regression tasks. It is defined as follows:
+\[
+L\big((\mathbf{x},y),h\big) =
+\begin{cases}
+(1/2)(y - h(\mathbf{x}))^2 & \text{for } |y - h(\mathbf{x})| \leq \varepsilon \\
+\varepsilon(|y - h(\mathbf{x})| - \varepsilon/2) & \text{else.}
+\end{cases}
+\]
+
+Basically, inside the $\epsilon$ interval it is a squared error loss, as outliers are not there, in order to have a continuous function. While outside the $\epsilon$ interval the absolute error loss is performed, in order to better tolerate the outliers.\\
+To conclude, here's a comparison of the different losses functions for regression tasks.
+
+Insensitive to noise indicates that the deviations of the samples y that are very close to the predictions h(x) have a lower effect on the loss.\\
+Loss functions are preferred to be both convex and differentiable since they are easier to minimize.
+
+\section{ERM for Classification}
+
+First of all, let's recall that in Classification tasks the end-goal is to predict discrete-valued labels either in a binary classification or in a multi-class classification. The loss functions are obtained from confidence measures, since no classical functions can be used to classify.\\
+In this case the data points are numeric features, as in linear regression; the model is the space of linear maps, also as in linear regression. But we define a logistic loss, which is different from linear regression.
+
+\subsection{Logistic Regression}
+
+Logistic Regression is defined as a model for classification tasks. In the \textbf{Logistic Regression} the model learns a linear hypothesis h(x), where the sign(h(x)) is used for label prediction, hence it is a binary classifier, and $|$h(x)$|$ is used as a confidence measure.\\
+The \textbf{Logistic Loss} is defined as follows:
+\[
+L\big((\mathbf{x},y),h\big) := \log\big(1 + \exp(-y h(\mathbf{x}))\big).
+\]
+
+It is important to note that the logistic loss is a differentiable and convex function. It is not possible to use squared error loss, for classification tasks, as the more confident a prediction is the bigger the error will be.
+
+Logistic Regression create a 2D decision boundary, where the decision boundary is represented by h(x) = 0.
+
+\subsection{Loss Functions in Classification}
+
+Lastly, there are different Losses functions in classification:
+\begin{itemize}
+    \item 0/1 Loss: non-differentiable and non-convex, which are bad properties. Additionally confidence doesn't matter here, as it only checks how many points are correctly classified (either 1 or 0).
+    \item Hinge Loss: it is convex but non-differentiable. ERM loss increases when it is less than 1, while it is 0 otherwise.
+\end{itemize}
+
+\section{Summary}
+
+\begin{itemize}
+    \item Approximate risk by average loss (empirical risk) on training data.
+    \item ERM can fail if empirical risk deviates from real risk.
+    \item Many ML methods are instances of ERM.
+    \item Three design choices of ERM: data, model and loss.
+    \item Examples of ERM regression and classification: linear models and derived ones.
+    \item In classification loss is obtained from confidence measures
+\end{itemize}
