@@ -1,0 +1,129 @@
+\chapter{ML Metrics and HyperParameter Tuning}
+
+\section{Performance Metrics}
+
+Losses are for machines, while it is needed to define metrics for humans. Metrics are a measure of quality and can be exploited in order to choose the hyper-parameters of a model.
+
+\subsection{Evaluation of supervised ML}
+
+\begin{itemize}
+    \item Efficiency: model building time, prediction time.
+    \item Scalability: training set size, attribute number.
+    \item Robustness: noise, missing data.
+    \item Interpretability: model interpretability, model compactness.
+\end{itemize}
+These are independent from the correctness of the resulting $y'$ labels.
+
+\subsection{Evaluation of Regression Techniques}
+
+The quality of the prediction is assessed through loss functions such as mean squared error, mean absolute error and other ones.
+
+\section{Evaluation of Classification Techniques}
+
+The quality of the prediction can be assessed through:
+\begin{itemize}
+    \item Confusion Matrix.
+    \item Accuracy.
+    \item Precision, Recall, F-measure per class and on average.
+    \item ROC curve and other metrics.
+\end{itemize}
+
+\subsection{Confusion Matrix}
+
+The Confusion Matrix is used to evaluate a classification task implemented by binary classifiers. It is built as follows:
+\begin{itemize}
+    \item Rows: Actual Class
+    \item Columns: Predicted Class
+    \item TP: True Positives when $y = y'$ for the positive class.
+    \item TN: True Negatives when $y = y'$ for the negative class.
+    \item FP: False Positives when $y'$ is positive while $y$ is negative.
+    \item FN: False Negatives when $y'$ is negative while $y$ is positive.
+\end{itemize}
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{c|c|c}
+        \textbf{Actual} $\backslash$ \textbf{Predicted} & \textbf{P} & \textbf{N} \\ \hline
+        \textbf{P} & True Positives (TP)  & False Negatives (FN) \\ \hline
+        \textbf{N} & False Positives (FP) & True Negatives (TN) \\
+    \end{tabular}
+    \caption{Confusion Matrix}
+\end{table}
+
+It can go up to $(n \times n)$. The correctly predicted values are always on the diagonal.
+
+\subsection{Accuracy}
+
+Accuracy is the most widely-used metric for model evaluation and it is computed as follows:
+\[
+\text{Accuracy} = \frac{\text{Number of correctly classified objects}}{\text{Number of classified objects}}
+\]
+For binary classifiers:
+\[
+\text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
+\]
+
+In addition accuracy has the following properties:
+\begin{itemize}
+    \item Accuracy is related to the 0/1 loss: it goes as $1 -$ (0/1 loss value).
+    \item Accuracy might be misleading in case of unbalanced classes or different class relevance and importance. Therefore, specific class measures are defined.
+\end{itemize}
+
+\subsection{Class Specific Measures}
+
+Class specific measures need to be evaluated separately for each class $c$. They are the precision $p$, the recall $r$ and the F-measure, which is the harmonic mean of the precision and recall. They are defined as follows:
+\begin{align*}
+    \text{Precision}(c) \quad p &= \frac{\text{Number of objects correctly assigned to } c}{\text{Number of objects assigned to } c} \\[4pt]
+    \text{Recall}(c) \quad r &= \frac{\text{Number of objects correctly assigned to } c}{\text{Number of objects belonging to } c} \\[4pt]
+    \text{F-measure}(c) \quad F &= \frac{2rp}{r + p}
+\end{align*}
+
+For a binary classification problem the following are the simplified formulas for the \underline{positive} class $c$:
+\begin{align*}
+    \text{Precision} \quad p &= \frac{TP}{TP + FP} \\[4pt]
+    \text{Recall (True Positive Rate)} \quad r &= \frac{TP}{TP + FN} \\[4pt]
+    \text{F-measure} \quad F &= \frac{2rp}{r + p} = \frac{2TP}{2TP + FP + FN}
+\end{align*}
+
+\subsection{ROC Curve}
+
+The Receiver Operating Characteristic (ROC) was developed for analyzing noisy signals and finding the trade-off between positive hits and false alarms. The ROC curve shows how the FP and TP rates change when changing the decision threshold. In $(0,0)$ we declare everything to be negative class, while in $(1,1)$ everything to be positive class. The diagonal line is random guessing if classes are balanced; below the diagonal line the prediction is opposite of the true class.\\
+It is important to compute the area under the curve (AUC) and choose the model with the largest area.
+
+
+M1 is better for small FPR, while M2 is better for large FPR.
+
+\textit{How to build ROC curve?}
+\begin{itemize}
+    \item Use a classifier that produces the posterior probability $P(+|x)$ for each sample $x$.
+    \item Apply a threshold at each unique value of $P(+|x)$.
+    \item Compute TPR and FPR at each threshold.
+\end{itemize}
+Since in the example we have 10 samples, $m = 10$ columns. We need to order them according to probability horizontally.
+
+
+\subsection{Learning Curve}
+The Learning Curve shows how a metric, or loss, changes with varying training sample size. It is possible to use different losses for training and validation, and this enables the comparison of different ML methods. It is a tool to find out how much we benefit from adding more training data.
+
+\section{HyperParameter Tuning}
+Hyper-Parameters are parameters that are \textbf{not directly learnt within estimators}. \textbf{Hyper-Parameters define the model space} and they are passed as arguments to the constructor of the estimator classes in scikit-learn. The aim is to search the hyper-parameters space for the best cross-validation score metric. Hence, hyper-parameters are really important for the final model selection.\\
+The \textbf{Validation Curve} can be used to assess the influence of a single hyper-parameter on the training score and the validation score. Hence, it is possible to find out whether the estimator is overfitting or underfitting for some hyper-parameter values.
+
+\subsection{Grid Search}
+Grid Search exhaustively generates candidates from a \textbf{grid of hyper-parameter values}. A different hypothesis is trained for all possible combinations of hyper-parameter values.
+
+\section{Recap}
+To sum up, these are the steps to follow when building an ML process:
+
+\begin{itemize}
+    \item Load/generate datasets.
+    \item Choose samples, features and labels.
+    \item Split the dataset in training, validation (or later cv) and testing.
+    \item Pre-processing techniques.
+    \item Define model and loss.
+    \item Perform ERM with an algorithm (learn).
+    \item Evaluate the obtained performance (metrics).
+    \item Tune the hyper-parameters.
+    \item Test the final hypothesis on test data.
+    \item Use it in the wild for inference.
+\end{itemize}

@@ -1,0 +1,53 @@
+\chapter{Model Selection and Validation}
+
+The $\mathcal{H}$ set of hypothesis can be nested, as polynomial hypothesis h can be built from linear hypothesis h. If we consider a polynomial hypothesis h of degree d at a certain point we will reach ERM 0, as we can perfectly fit any m data points using polynomials of degree n as soon as $n \geq m - 1$. However, it is not a best practice to pursue since it leads to \textbf{overfitting}.
+
+Overfitting happens when a model performs really well on the training data, as the case for high degree polynomials h, but has poor performance on the unseen test data. This means that a small train error does not guarantee good performance outside the training set, on new data points. Instead, small training error only indicates that we have solved the ERM optimization problem, hence our model correctly minimizes the ERM. Just as a reminder, on the contrary, underfitting occurs when a model is too simple and fails to capture the underlying relationship in the data, it is characterized by poor performance in the training error.
+
+It is like our trained model h function is so fixed on the training data that any new data different from it may be badly classified.\\
+Since as we have seen only considering the train error can mislead, the concept of Validation is needed.
+
+\section{Validation}
+
+The basic idea behind Validation is to divide the initial dataset into two subsets:
+\begin{itemize}
+    \item Training and Validation Set.
+    \item Use Training Set to learn a hypothesis h
+    \item Use Validation Set to probe outside the training set in order to estimate the expected loss.
+\end{itemize}
+
+In this way, h will still learn on the training set but the ERM performance will be assessed on the Validation Data. Therefore, we will choose our model via the validation error. Firstly, the ERM is performed on the training set, then it is also assessed on the validation error. The end-goal is to select the model that minimizes the training error and has the smallest validation error.
+
+\begin{itemize}
+    \item Overfitting: model performs much better on the training set than on the validation set.
+    \item Underfitting: more or less same performance, but really low since the model is not complex enough to learn the best h.
+\end{itemize}
+
+It may happen that when splitting into training and validation set we encounter an unlucky split, leading to non optimal results. To tackle this issue, \textbf{k-fold cross validation} is exploited.
+
+\section{K-Fold Cross Validation}
+
+Since we might be unlucky with the train-val split and this is really problematic for small datasets, the concept of K-Fold Cross Validation is to randomly split train-val several times, in order to average out the unlucky splits. The splits will be performed K times.
+
+In K-Fold Cross Validation the training error and the validation error are the average empirical loss over the k training folds. In order to optimally select the K number of folds, the train fold should be sufficiently large to avoid overfitting and the validation folds should be sufficiently large to get reliable estimate of generalization.\\
+\underline{Warning}: K-Fold works if the data is i.i.d. and the order of data points is arbitrary, however in the case of grouped or ordered data points this is not true, hence k-fold might fail in this case.\\
+For unbalanced datasets in classes or groups the StratifiedKFold and GroupKFold functions are needed.
+
+\subsection{Test Set}
+
+Additionally, we need a test set different from training and validation set, since the real valid error might not be that optimistic anymore, as validation error is a poor performance indication. There might be some noise, it might be too optimistic since it is chosen with smallest loss.
+
+\subsection{Model Selection Recipe}
+
+\begin{itemize}
+    \item Input: list of candidate models
+    \item For each candidate model:
+    \begin{enumerate}
+        \item Learn optimal h by minimizing the training error.
+        \item Compute the validation error on the validation set.
+    \end{enumerate}
+    \item Choose h with minimum validation error.
+    \item Compute test error on test set.
+\end{itemize}
+
+To sum up, ML methods using large models tend to overfit. It is needed to probe the learnt hypothesis outside the training set by validating it on the validation set. Pick the model with minimum validation error. Finally, compute the test error for the chosen model.
