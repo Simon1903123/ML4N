@@ -1,0 +1,605 @@
+%====================================================================
+% contents/project.tex
+% Capitolo da includere con \include{contents/project}.
+% Usa solo cio' che e' gia' nel main.tex: i box attenzione/strategia/domande
+% (tcolorbox), tabularx, booktabs, enumitem, listings, xcolor, amssymb.
+%====================================================================
+\chapter{Project 8 -- DDoS attacks detection and characterization}
+
+\begingroup % impostazioni valide solo in questo capitolo
+\setlist{nosep}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\sloppy
+\setlength{\emergencystretch}{3em}
+
+% stile per il codice Python (listings, gia' caricato nel main)
+\lstdefinestyle{ddos}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{red!60!black},
+  numbers=left, numberstyle=\tiny\color{gray},
+  frame=single, breaklines=true, columns=fullflexible,
+  showstringspaces=false, backgroundcolor=\color{gray!5}
+}
+%====================================================================
+\section{Di cosa parla il progetto}
+%====================================================================
+
+\subsection{Il problema}
+Un attacco \textbf{DDoS} (\emph{Distributed Denial of Service}) cerca di rendere
+un servizio inutilizzabile per gli utenti legittimi saturandone le risorse
+(banda, CPU, tabelle di connessione) con traffico generato da molte macchine
+compromesse. Gli attacchi possono avvenire a livello rete, trasporto o
+applicazione, usando protocolli come TCP, UDP, ICMP e HTTP.
+
+Il dataset contiene soprattutto attacchi \textbf{riflessivi/amplificati}
+(\emph{reflection/amplification}): l'attaccante invia piccole richieste a server
+pubblici (DNS, NTP, LDAP, SNMP, NetBIOS, MSSQL, \dots) falsificando l'IP sorgente
+(\emph{IP spoofing}) con quello della vittima. I server rispondono alla vittima
+con risposte molto più grandi della richiesta: il fattore di amplificazione
+moltiplica il volume di traffico. A questi si aggiungono attacchi ``di
+esaurimento'' come \textbf{SYN flood} (riempie la coda delle connessioni TCP
+semiaperte) e \textbf{UDP flood / UDP-Lag}.
+
+L'ipotesi di fondo del progetto è che \emph{attacchi diversi lascino impronte
+statistiche diverse} nelle feature di flusso (dimensione dei pacchetti, rate,
+inter-arrival time, flag TCP, porte, \dots), e che quindi il Machine Learning
+possa (i) riconoscerli e (ii) raggrupparli.
+
+\subsection{Il dataset}
+\begin{itemize}
+  \item Ogni riga è un \textbf{flusso}: sequenza di pacchetti tra una coppia
+        (IP sorgente, IP destinazione) con porte e protocollo, estratto con
+        \textbf{CICFlowMeter-V3}. La struttura (feature, tipologie di
+        attacco, 25 utenti simulati su HTTP/HTTPS/FTP/SSH/email) corrisponde a
+        quella del dataset pubblico \textbf{CIC-DDoS2019} dell'University of New
+        Brunswick: conviene leggerne il paper per capire come è stato costruito.
+  \item Circa 80+ feature numeriche: statistiche di lunghezza pacchetti,
+        inter-arrival time (IAT), rate, flag TCP, feature di bulk, subflow,
+        active/idle time.
+  \item \textbf{Ground truth}: colonna \texttt{label} con 12 classi:
+        \texttt{benign} + 11 attacchi (\texttt{ddos\_ldap}, \texttt{ddos\_udp},
+        \dots). L'elenco esatto va verificato con \texttt{value\_counts()}.
+  \item Dimensione: $\sim$28\,MB di CSV, quindi gestibile interamente in RAM con
+        pandas; solo alcune operazioni (silhouette, t-SNE, OC-SVM) richiedono
+        subsampling.
+\end{itemize}
+
+\subsection{Cosa chiede il progetto, in una frase per sezione}
+\begin{enumerate}
+  \item \textbf{Esplorazione e pre-processing}: capire i dati e costruire una
+        feature matrix pulita.
+  \item \textbf{Classificazione (supervisionata)}: dato un flusso, predire il
+        tipo di attacco; confrontare split casuale e split temporale.
+  \item \textbf{Clustering (non supervisionato)}: senza usare le label, vedere se
+        i flussi si raggruppano in ``famiglie''.
+  \item \textbf{Spiegabilità e anomaly detection}: usare le label \emph{a
+        posteriori} per interpretare i cluster; infine addestrare un modello
+        solo su traffico benigno e vedere quali attacchi emergono come anomalie.
+\end{enumerate}
+
+\begin{attenzione}
+Il filo conduttore di tutto il progetto è il \textbf{data leakage}. Feature come
+\texttt{Flow ID}, \texttt{Source IP}, \texttt{Destination IP},
+\texttt{Timestamp} (e in parte \texttt{Source Port}) identificano \emph{come} è
+stato registrato il dataset, non \emph{come} si comporta l'attacco. Nel
+CIC-DDoS2019 l'attaccante e la vittima hanno IP fissi: un modello che usa gli IP
+raggiunge accuratezze altissime senza aver imparato nulla di utile. Vanno
+rimosse dalla feature matrix (ma conservate a parte: servono per l'EDA, per lo
+split temporale e per l'analisi degli errori).
+\end{attenzione}
+
+%====================================================================
+\section{Setup comune (da fare tutti insieme, prima di dividersi)}
+%====================================================================
+
+\begin{strategia}
+\begin{itemize}
+  \item \textbf{Repository Git} con struttura:
+        \texttt{data/} (fuori dal versionamento), \texttt{notebooks/},
+        \texttt{src/} (funzioni condivise), \texttt{figures/}, \texttt{report/}.
+  \item Un modulo \texttt{src/preprocessing.py} con \emph{una sola} funzione
+        \texttt{load\_clean()} che tutti importano: così nessuno lavora su una
+        versione diversa dei dati.
+  \item Salvare il dataset pulito in \texttt{.parquet} (lettura molto più
+        veloce del CSV, mantiene i tipi).
+  \item Fissare \texttt{RANDOM\_STATE = 42} ovunque (split, modelli,
+        subsampling) per riproducibilità.
+  \item Concordare uno \textbf{stile unico per i grafici} (palette per classe
+        fissa: \texttt{benign} sempre dello stesso colore in tutti i plot) e un
+        file \texttt{src/plotting.py}.
+  \item Stabilire il formato di consegna richiesto dal docente (notebook,
+        report, presentazione) e chiarire i dubbi con il referente indicato
+        nella traccia.
+\end{itemize}
+\end{strategia}
+
+%====================================================================
+\section{Sezione 1 -- Data exploration e pre-processing}
+%====================================================================
+
+\subsection{Cosa chiede}
+Presentare il dataset con visualizzazioni e statistiche, a livello di traffico
+generico e a livello di classe (GT); poi pulire, analizzare correlazioni, fare
+PCA, decidere scaling ed encoding, e caratterizzare la feature matrix finale.
+
+\subsection{Investigazione del dataset (punto 1.1 della traccia)}
+\begin{strategia}
+\textbf{Controlli di qualità iniziali}
+\begin{itemize}
+  \item \texttt{df.shape}, \texttt{df.dtypes}, \texttt{df.isna().sum()},
+        duplicati (\texttt{df.duplicated().sum()}).
+  \item Valori \texttt{inf}: tipici in \texttt{Flow Bytes/s} e
+        \texttt{Flow Packets/s} quando \texttt{Flow Duration}=0.
+  \item Colonne costanti (varianza nulla): nel CIC-DDoS2019 molte feature di
+        bulk e flag (\texttt{Bwd PSH Flags}, \texttt{Fwd/Bwd URG Flags},
+        \texttt{*Avg Bytes/Bulk}, \dots) sono sempre 0.
+  \item Colonne duplicate: \texttt{Fwd Header Length.1} è una copia di
+        \texttt{Fwd Header Length}; verificare anche altre coppie identiche
+        (es.\ \texttt{Subflow Fwd Packets} vs \texttt{Total Fwd Packets}).
+  \item Eventuale colonna indice \texttt{Unnamed: 0} da eliminare.
+  \item Valori negativi impossibili (es.\ \texttt{Init\_Win\_bytes} $=-1$
+        significa ``non disponibile'').
+\end{itemize}
+
+\textbf{Livello traffico generico}
+\begin{itemize}
+  \item Numero di flussi totale e per classe (bar plot, scala log se
+        sbilanciato): evidenziare lo \textbf{sbilanciamento delle classi}.
+  \item Numero di IP sorgente/destinazione distinti, flussi per IP
+        (ECDF), top-$k$ IP.
+  \item Distribuzione dei protocolli (TCP=6, UDP=17, \dots) globale e per classe.
+  \item Andamento temporale: flussi per minuto colorati per label. Si vede
+        che gli attacchi sono eseguiti in finestre temporali successive
+        (fondamentale per capire la Sezione 2.1b).
+\end{itemize}
+
+\textbf{Livello GT (per classe)}
+\begin{itemize}
+  \item ECDF delle \textbf{porte destinazione e sorgente} per classe: gli
+        attacchi riflessivi usano porte di servizio note (DNS 53, NTP 123,
+        SNMP 161, NetBIOS 137--139, LDAP 389, MSSQL 1434, SSDP 1900, \dots).
+  \item ECDF/boxplot (asse log) di \texttt{Flow Duration}, \texttt{Total Fwd
+        Packets}, \texttt{Fwd Packet Length Mean}, \texttt{Flow Bytes/s},
+        \texttt{Flow IAT Mean} per classe.
+  \item Tabella con mediana e IQR di alcune feature per classe.
+  \item Flag TCP (SYN, ACK, \dots) per classe: SYN flood deve emergere
+        chiaramente.
+\end{itemize}
+\end{strategia}
+
+\begin{domande}
+Si vede la differenza tra traffico benigno e attacchi? Quali attacchi sono
+facili da distinguere tra loro e quali si sovrappongono (es.\ attacchi
+riflessivi UDP con pacchetti di dimensione simile)? Questa risposta anticipa
+le confusioni che vedrete nella Sezione 2.
+\end{domande}
+
+\subsection{Pre-processing (punto 1.2 della traccia)}
+\begin{strategia}
+\textbf{Pulizia e selezione}
+\begin{enumerate}
+  \item Rimuovere identificatori: \texttt{Flow ID}, IP, \texttt{Timestamp}
+        (tenuto a parte), \texttt{Source Port} (porte effimere casuali =
+        rumore e possibile leakage).
+  \item Sostituire \texttt{inf} con \texttt{NaN}, poi imputare o eliminare le
+        righe (giustificare: se sono poche, eliminarle).
+  \item Eliminare colonne costanti e duplicate.
+  \item \textbf{Correlazione}: heatmap di Pearson (e Spearman, più adatta a
+        distribuzioni heavy-tailed). Eliminare una feature per ogni coppia con
+        $|\rho|>0.95$ (o soglia giustificata). Molte feature sono derivate
+        l'una dall'altra (mean/max/std, totali/subflow).
+\end{enumerate}
+
+\textbf{PCA}
+\begin{itemize}
+  \item Va fatta \emph{dopo} lo scaling (la PCA è sensibile alla scala).
+  \item Plot della varianza spiegata cumulata: quante componenti per il
+        90/95\%?
+  \item Scatter PC1 vs PC2 colorato per label: prima intuizione della
+        separabilità.
+  \item Loadings delle prime componenti: quali feature pesano di più?
+  \item Decisione: per la classificazione con alberi conviene \emph{non}
+        usare la PCA (si perde interpretabilità, servono le feature originali
+        per l'analisi FP/FN); per clustering e anomaly detection può aiutare
+        (distanze più significative in dimensione ridotta). Motivarlo nel
+        report.
+\end{itemize}
+
+\textbf{Scaling ed encoding}
+\begin{itemize}
+  \item Le feature sono \textbf{heavy-tailed} (byte/s da 0 a $10^9$): applicare
+        \texttt{log1p} alle feature non negative prima dello scaling è spesso
+        più efficace di qualunque scaler.
+  \item \texttt{StandardScaler} (o \texttt{RobustScaler}, meno sensibile agli
+        outlier) necessario per KNN, SVM, regressione logistica, k-means, PCA;
+        \emph{non} necessario per alberi/random forest (invarianti a
+        trasformazioni monotone). Spiegarlo.
+  \item \texttt{Protocol} è categorica (6/17/0): \textbf{one-hot}, perché un
+        valore numerico implicherebbe un ordine inesistente.
+  \item \texttt{Destination Port}: categorica ad alta cardinalità. Opzioni:
+        raggruppare in bucket (well-known $<1024$, registered, dynamic) e
+        fare one-hot, oppure flag binari per le porte più frequenti. Discutere
+        il rischio che la porta sia una scorciatoia che rende il problema
+        banale.
+  \item \texttt{label}: \texttt{LabelEncoder} per i classificatori
+        (one-hot non serve per i modelli sklearn).
+\end{itemize}
+\end{strategia}
+
+\begin{attenzione}
+Scaler, PCA e qualunque trasformazione ``appresa'' vanno \textbf{fittati solo
+sul training set} e poi applicati al test. Usare una \texttt{sklearn.pipeline.Pipeline}
+risolve il problema automaticamente, anche dentro la cross-validation.
+\end{attenzione}
+
+\subsection{Feature matrix finale (punto 1.3 della traccia)}
+Ripetere per la matrice finale: ECDF/EPDF delle feature selezionate (dopo log e
+scaling), heatmap di correlazione residua, dimensione finale ($n$ righe
+$\times$ $d$ feature) e lista delle feature tenute con motivazione.
+
+%====================================================================
+\section{Sezione 2 -- Classificazione supervisionata}
+%====================================================================
+
+\subsection{Train/test split (punto 2.1 della traccia)}
+\begin{strategia}
+\textbf{a) Split per-flow stratificato}: \texttt{train\_test\_split} con \texttt{test\_size=0.2}, \texttt{stratify=y} e \texttt{random\_state=42}. Ogni flusso è trattato come
+indipendente.
+
+\textbf{b) Split temporale stratificato}: per ogni classe, ordinare per
+\texttt{Timestamp} e prendere il primo 80\% come train e il restante 20\% come
+test.
+\end{strategia}
+
+\begin{lstlisting}[style=ddos]
+def temporal_split(df, label_col="label", time_col="Timestamp", test_size=0.2):
+    df = df.copy()
+    df[time_col] = pd.to_datetime(df[time_col])
+    train_idx, test_idx = [], []
+    for _, g in df.groupby(label_col):
+        g = g.sort_values(time_col)
+        cut = int(len(g) * (1 - test_size))
+        train_idx.extend(g.index[:cut])
+        test_idx.extend(g.index[cut:])
+    return df.loc[train_idx], df.loc[test_idx]
+\end{lstlisting}
+
+Verificare con un plot che, per ogni classe, il massimo timestamp del train sia
+minore del minimo del test.
+
+\subsection{Training e valutazione (punto 2.2 della traccia)}
+\begin{strategia}
+\textbf{Scelta dei modelli} (almeno 2, gli stessi per entrambi gli split).
+Suggerimento: uno ``semplice'' e uno ``forte'', così il confronto è
+interessante.
+\begin{itemize}
+  \item \textbf{Random Forest}: robusto, non richiede scaling, fornisce
+        feature importance (utile per spiegare gli errori).
+  \item \textbf{KNN} o \textbf{Logistic Regression}: baseline sensibile allo
+        scaling, contrasto utile.
+  \item Opzionali: Decision Tree (interpretabile), XGBoost/LightGBM, MLP.
+\end{itemize}
+
+\textbf{Valutazione}
+\begin{itemize}
+  \item Accuracy su train \emph{e} test (serve per diagnosticare
+        overfitting).
+  \item \texttt{classification\_report} e confusion matrix normalizzata per
+        riga (recall per classe).
+  \item Con classi sbilanciate l'accuracy è fuorviante: usare
+        \textbf{macro-F1} come metrica principale.
+  \item Misurare il \textbf{tempo di training e di inferenza}
+        (\texttt{time.perf\_counter()}): serve per il punto c).
+\end{itemize}
+
+\textbf{b) Over/underfitting}: train $\approx 100\%$ e test molto più basso =
+overfitting (tipico di alberi senza limite di profondità). Rimedi:
+\texttt{max\_depth}, \texttt{min\_samples\_leaf}, meno feature, più
+regolarizzazione. Train e test entrambi bassi = underfitting (modello troppo
+semplice o feature non informative).
+
+\textbf{c) Hyper-parameter tuning}: \texttt{GridSearchCV} o
+\texttt{RandomizedSearchCV} con \texttt{StratifiedKFold(5)} e
+\texttt{scoring="f1\_macro"}. Esempi di griglie:
+\begin{itemize}
+  \item RF: \texttt{n\_estimators} $\in\{50,100,300\}$, \texttt{max\_depth}
+        $\in\{\text{None},10,20\}$, \texttt{min\_samples\_leaf}
+        $\in\{1,5\}$, \texttt{class\_weight} $\in\{\text{None},\text{balanced}\}$.
+  \item KNN: \texttt{n\_neighbors} $\in\{3,5,11,21\}$, \texttt{weights},
+        \texttt{metric}.
+\end{itemize}
+Per lo split temporale la CV dovrebbe rispettare il tempo (es.\ fold
+ordinati temporalmente per classe, o \texttt{TimeSeriesSplit}): discuterlo.
+Riportare una tabella \emph{performance vs tempo di training} e scegliere il
+compromesso.
+\end{strategia}
+
+\begin{domande}
+Quale modello è migliore e perché? Perché alcune classi hanno performance più
+basse? (Risposta attesa: attacchi riflessivi su UDP con pattern di traffico
+quasi identici, es.\ DNS/LDAP, NetBIOS/Portmap, UDP/UDP-Lag, generano
+flussi molto simili e vengono confusi tra loro; attacchi con firma netta come
+SYN sono facili.)
+\end{domande}
+
+\subsection{Analisi dei risultati (punto 2.3 della traccia)}
+\begin{strategia}
+\textbf{a) FP e FN}
+\begin{itemize}
+  \item Estrarre i campioni mal classificati e identificare le coppie di
+        classi più confuse dalla confusion matrix.
+  \item Per una coppia (vera $A$, predetta $B$): confrontare le distribuzioni
+        di feature (ECDF/boxplot) di tre gruppi: $A$ corretti, $B$ corretti,
+        $A$ predetti come $B$. Tipicamente i mal classificati ``sembrano''
+        $B$ nelle feature più importanti.
+  \item Feature importance (RF) o permutation importance per scegliere quali
+        feature mostrare.
+  \item Guardare anche gli identificatori rimossi (IP, timestamp) dei campioni
+        sbagliati: sono flussi di bordo all'inizio/fine di un attacco? Flussi
+        benigni finiti in mezzo a una finestra di attacco?
+\end{itemize}
+
+\textbf{b) Metriche nel contesto reale}
+\begin{itemize}
+  \item Riformulare il problema come binario (benign vs attacco).
+  \item \textbf{FP} = traffico benigno segnalato come attacco $\rightarrow$
+        \emph{falso allarme}: l'operatore perde tempo o, peggio, blocca utenti
+        legittimi. Lo misura la \textbf{precision} della classe attacco
+        (equivalentemente il FPR / la recall della classe benign).
+  \item \textbf{FN} = attacco classificato come benigno $\rightarrow$
+        \emph{attacco non rilevato}. Lo misura la \textbf{recall} (detection
+        rate) della classe attacco.
+  \item Trade-off: in un SOC un FPR alto causa \emph{alert fatigue}; una
+        recall bassa lascia passare attacchi lenti/subdoli.
+  \item Nel multiclasse, confondere due tipi di attacco è meno grave che
+        confondere attacco e benigno (la mitigazione resta attivata):
+        evidenziarlo.
+\end{itemize}
+
+\textbf{c) Per-flow vs per-time}: lo split per-flow tende a essere
+\textbf{ottimistico}, perché flussi quasi identici e consecutivi dello stesso
+attacco finiscono sia in train sia in test (quasi-duplicati $\rightarrow$
+leakage). Lo split temporale simula lo scenario reale (si addestra sul passato,
+si predice il futuro) e cattura il \emph{concept drift} all'interno di un
+attacco (cambi di intensità/fase). Se lo split temporale va peggio, è la
+misura più onesta.
+\end{strategia}
+
+%====================================================================
+\section{Sezione 3 -- Clustering}
+%====================================================================
+
+\subsection{Cosa chiede}
+Raggruppare i flussi \textbf{senza label}, con almeno 2 algoritmi e almeno 2
+metriche di similarità, determinare il numero di cluster, fare tuning,
+valutare e visualizzare.
+
+\begin{strategia}
+\textbf{Input}: feature matrix della Sezione 1 (log + scaling, eventualmente
+PCA). \emph{La label non deve entrare in nessun passaggio di fit.}
+
+\textbf{Subsampling}: silhouette ($O(n^2)$), agglomerative e t-SNE sono costosi;
+lavorare su un campione stratificato (es.\ 10--20k flussi) per la scelta degli
+iperparametri e dichiararlo.
+
+\textbf{Algoritmi suggeriti} (sceglierne almeno 2 con logiche diverse):
+\begin{itemize}
+  \item \textbf{K-Means}: centroidi, cluster convessi, serve $k$.
+  \item \textbf{DBSCAN / HDBSCAN}: densità, trova forme arbitrarie e rumore,
+        non serve $k$.
+  \item \textbf{Agglomerative clustering}: gerarchico, dendrogramma utile per
+        vedere ``famiglie'' di attacchi, supporta più metriche.
+  \item \textbf{Gaussian Mixture}: soft clustering, cluster ellittici.
+\end{itemize}
+
+\textbf{1. Numero di cluster}
+\begin{itemize}
+  \item K-Means: elbow (inertia vs $k$) + silhouette vs $k$, per
+        $k=2\dots20$. Non forzare $k=12$: il punto è vedere se emergono
+        meno ``famiglie'' delle classi.
+  \item DBSCAN: \emph{k-distance plot} per scegliere \texttt{eps},
+        \texttt{min\_samples} $\approx 2\cdot d$.
+  \item Agglomerative: dendrogramma + silhouette.
+  \item GMM: BIC/AIC vs numero di componenti.
+\end{itemize}
+
+\textbf{2. Metriche di similarità}
+\begin{itemize}
+  \item \textbf{Euclidea}: dipende dalla magnitudine (volume del flusso).
+  \item \textbf{Coseno}: dipende dalla ``forma'' del vettore (proporzioni tra
+        feature), non dalla scala.
+  \item Note pratiche: K-Means in sklearn supporta solo l'euclidea; per il
+        coseno normalizzare L2 i vettori e poi K-Means (\emph{spherical
+        k-means}). Agglomerative (\texttt{linkage="average"}) e DBSCAN
+        accettano \texttt{metric="cosine"}. Opzionale: Manhattan.
+\end{itemize}
+
+\textbf{3. Tuning, valutazione, visualizzazione}
+\begin{itemize}
+  \item Metriche interne (non usano la GT): silhouette, Davies--Bouldin,
+        Calinski--Harabasz.
+  \item Metriche esterne (usano la GT \emph{solo per valutare}): ARI, NMI,
+        homogeneity, completeness, purity.
+  \item Visualizzazione: PCA 2D e t-SNE/UMAP su un campione, due pannelli
+        affiancati: colore = cluster e colore = label vera.
+  \item Silhouette plot per cluster (stile ``coltelli'').
+\end{itemize}
+
+\textbf{4. Analisi grezza}: dimensione dei cluster (bar plot), ECDF del
+numero di flussi per cluster, silhouette media per cluster, quanti punti
+DBSCAN etichetta come rumore.
+\end{strategia}
+
+%====================================================================
+\section{Sezione 4 -- Spiegabilità dei cluster e anomaly detection}
+%====================================================================
+
+\subsection{Distribuzione delle classi nei cluster (punto 4.1 della traccia)}
+\begin{strategia}
+\begin{itemize}
+  \item \textbf{Tabella di contingenza} cluster $\times$ label
+        (\texttt{pd.crosstab}), mostrata come heatmap normalizzata per riga
+        (composizione del cluster) e per colonna (dove finisce ogni classe).
+  \item \textbf{a)} Per ogni classe, contare in quanti cluster cade
+        (considerando solo i cluster che contengono almeno, es., l'1\% dei
+        flussi di quella classe, per ignorare la coda) e farne l'\textbf{ECDF}.
+  \item \textbf{b)} Per ogni cluster: purity (frazione della classe
+        maggioritaria) ed entropia della distribuzione delle label. Cluster
+        con purity $\approx1$ = cluster ``puri''.
+  \item \textbf{c)} Caratterizzare i cluster con le feature: centroidi/mediane
+        per cluster, heatmap delle feature (z-score) per cluster, top feature
+        che distinguono un cluster dagli altri. Dare un nome ``semantico'' a
+        ogni cluster (es.\ ``flussi brevi, pacchetti UDP grandi, porta
+        well-known'' $\rightarrow$ famiglia di amplificazione).
+  \item Cercare cluster misti benign+attacco: è traffico benigno con
+        caratteristiche simili al malevolo (es.\ DNS legittimo vs DNS
+        reflection)?
+\end{itemize}
+\end{strategia}
+
+\subsection{Anomaly detection su solo traffico benigno (punto 4.2 della traccia)}
+\begin{strategia}
+\textbf{Split} (punto chiave da spiegare bene):
+\begin{itemize}
+  \item Benign diviso in \emph{train} (es.\ 60\%), \emph{validation} (20\%),
+        \emph{test} (20\%), meglio se temporalmente.
+  \item Tutti gli attacchi vanno \textbf{solo nel test} (non vengono mai visti).
+  \item Scaler/PCA fittati \textbf{solo} sul benign di train.
+  \item La soglia di anomalia si sceglie sul benign di validation (es.\ 95$^\circ$
+        o 99$^\circ$ percentile dello score $\Rightarrow$ FPR atteso 5\% o 1\%),
+        mai guardando gli attacchi.
+\end{itemize}
+
+\textbf{Tecniche} (almeno 2):
+\begin{itemize}
+  \item \textbf{Isolation Forest}: veloce, poche assunzioni.
+  \item \textbf{One-Class SVM} (kernel RBF): richiede scaling e un campione
+        ridotto per costo computazionale; sensibile a \texttt{nu} e
+        \texttt{gamma}.
+  \item \textbf{Autoencoder}: si allena a ricostruire il benigno; score =
+        errore di ricostruzione.
+  \item \textbf{Local Outlier Factor} con \texttt{novelty=True}, oppure
+        GMM (score = log-verosimiglianza).
+\end{itemize}
+
+\textbf{Valutazione}
+\begin{itemize}
+  \item FPR sul benign di test; \textbf{detection rate per classe di
+        attacco} (bar plot): risponde direttamente a ``quali attacchi
+        passano come normali''.
+  \item ROC e AUC (attacco vs benign) per confrontare le tecniche
+        indipendentemente dalla soglia.
+  \item Distribuzione degli score: istogramma benign vs ciascun attacco.
+  \item Collegare i risultati al clustering: gli attacchi non rilevati sono
+        quelli che finivano in cluster misti con il benigno?
+\end{itemize}
+
+\textbf{Scelta finale}: confrontare AUC, detection rate, FPR, tempo di training
+e facilità di tuning; motivare la scelta.
+\end{strategia}
+
+\begin{lstlisting}[style=ddos]
+from sklearn.ensemble import IsolationForest
+benign = df[df.label == "benign"]
+attack = df[df.label != "benign"]
+b_train, b_tmp = train_test_split(benign, test_size=0.4, random_state=42)
+b_val, b_test  = train_test_split(b_tmp,  test_size=0.5, random_state=42)
+
+scaler = StandardScaler().fit(b_train[FEATS])        # solo benign!
+iso = IsolationForest(random_state=42).fit(scaler.transform(b_train[FEATS]))
+
+score = lambda d: -iso.score_samples(scaler.transform(d[FEATS]))  # alto = anomalo
+thr = np.percentile(score(b_val), 99)                 # soglia da benign
+test = pd.concat([b_test, attack])
+test["pred_anom"] = score(test) > thr
+print(test.groupby("label")["pred_anom"].mean())      # detection rate / FPR
+\end{lstlisting}
+
+%====================================================================
+\section{Divisione del lavoro in 4 persone}
+%====================================================================
+
+\subsection{Logica della divisione}
+Le sezioni non sono indipendenti: la Sezione 1 produce i dati per tutti, e la
+4.1 dipende dalla 3. Una divisione ``una sezione a testa'' lascerebbe chi fa la
+Sezione 4 bloccato e chi fa la Sezione 1 senza lavoro dopo le prime settimane.
+La proposta bilancia il carico sfruttando i punti in cui il lavoro può partire
+in parallelo.
+
+\subsection{Ruoli}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{2.3cm} X X}
+\toprule
+Persona & Responsabilità principale & Seconda fase \\
+\midrule
+A -- Data & Sezione 1 completa (EDA, pulizia, correlazione, PCA, scaling,
+encoding, feature matrix finale). Scrive \texttt{preprocessing.py}. &
+Sezione 2.3a (analisi FP/FN in termini di feature: chi conosce meglio le feature
+è la persona giusta). Coordina il report e l'uniformità dei grafici. \\
+B -- Classificazione & Sezione 2.1 e 2.2: i due split, training dei modelli,
+over/underfitting, tuning con CV, tabella tempo vs performance. &
+Sezione 2.3b e 2.3c (metriche nel contesto reale, confronto per-flow vs
+per-time). \\
+C -- Clustering & Sezione 3 completa: algoritmi, scelta di $k$/\texttt{eps},
+metriche di similarità, tuning, visualizzazioni. &
+Supporto alla 4.1: fornisce a D le assegnazioni ai cluster salvate su file. \\
+D -- Anomaly \& spiegabilità & Sezione 4.2 (anomaly detection): può partire
+subito dopo il preprocessing, non dipende dal clustering. &
+Sezione 4.1 (distribuzione delle classi nei cluster, caratterizzazione dei
+cluster) usando l'output di C. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Timeline indicativa}
+\begin{enumerate}
+  \item \textbf{Fase 0 -- tutti insieme (pochi giorni).} Leggere traccia e
+        paper CIC-DDoS2019, setup repo, prima esplorazione insieme, decisione
+        condivisa su feature da rimuovere e gestione di \texttt{inf}/NaN. A
+        consolida tutto in \texttt{preprocessing.py}.
+  \item \textbf{Fase 1 -- lavoro parallelo.} A completa l'EDA e la PCA; B, C e D
+        partono con la versione ``base'' del preprocessing (pulizia + log +
+        scaling) senza aspettare la versione finale di A.
+  \item \textbf{Fase 2 -- integrazione.} Si aggiorna tutto alla feature matrix
+        finale di A. C consegna i cluster a D; A e B lavorano sulla 2.3.
+  \item \textbf{Fase 3 -- report.} Ognuno scrive la propria parte; A uniforma;
+        revisione incrociata (ognuno rilegge una sezione non sua).
+\end{enumerate}
+
+\subsection{Regole per lavorare bene insieme}
+\begin{itemize}
+  \item Un notebook per sezione, nessuno modifica il notebook di un altro;
+        il codice condiviso sta in \texttt{src/}.
+  \item Output intermedi salvati su file (\texttt{X\_clean.parquet},
+        \texttt{splits.pkl}, \texttt{clusters.csv}) così le dipendenze non
+        bloccano nessuno.
+  \item Ogni scelta va annotata con la sua motivazione mentre la si fa: il
+        report chiede continuamente ``spiega perché''.
+  \item Breve riunione settimanale per allineare scelte che impattano gli
+        altri (es.\ A cambia le feature $\Rightarrow$ B, C, D devono saperlo).
+  \item \textbf{Ognuno deve capire tutto il progetto}, non solo la propria
+        parte: se è previsto un orale, le domande possono riguardare qualunque
+        sezione. Fare una sessione finale in cui ciascuno spiega la propria
+        parte agli altri.
+\end{itemize}
+
+%====================================================================
+\section{Checklist finale}
+%====================================================================
+\begin{itemize}
+  \item[$\square$] Identificatori (IP, Flow ID, Timestamp) esclusi dalle feature.
+  \item[$\square$] Scaler/PCA fittati solo sul train (pipeline).
+  \item[$\square$] Stessi modelli su entrambi gli split.
+  \item[$\square$] Macro-F1 e confusion matrix normalizzata, non solo accuracy.
+  \item[$\square$] Tempi di training riportati per la scelta del modello.
+  \item[$\square$] Label mai usate nel fit del clustering.
+  \item[$\square$] Anomaly detection: attacchi solo nel test, soglia scelta sul benign.
+  \item[$\square$] Ogni grafico ha titolo, assi con unità, scala log dove serve, legenda.
+  \item[$\square$] Ogni domanda della traccia ha una risposta esplicita nel report.
+  \item[$\square$] \texttt{random\_state} fissato, risultati riproducibili.
+\end{itemize}
+
+\endgroup

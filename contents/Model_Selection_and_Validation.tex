@@ -1,53 +1,267 @@
 \chapter{Model Selection and Validation}
 
-The $\mathcal{H}$ set of hypothesis can be nested, as polynomial hypothesis h can be built from linear hypothesis h. If we consider a polynomial hypothesis h of degree d at a certain point we will reach ERM 0, as we can perfectly fit any m data points using polynomials of degree n as soon as $n \geq m - 1$. However, it is not a best practice to pursue since it leads to \textbf{overfitting}.
+In the previous chapter we learnt the hypothesis $\widehat{h}$ by ERM \emph{inside a fixed} hypothesis space $\mathcal{H}$. In practice we also have to choose $\mathcal{H}$ itself: the degree of a polynomial, which features to use, the depth of a tree. This choice is called \textbf{model selection}. This chapter shows why the training error cannot guide it, and how \textbf{validation} gives us a reliable way to compare models.
 
-Overfitting happens when a model performs really well on the training data, as the case for high degree polynomials h, but has poor performance on the unseen test data. This means that a small train error does not guarantee good performance outside the training set, on new data points. Instead, small training error only indicates that we have solved the ERM optimization problem, hence our model correctly minimizes the ERM. Just as a reminder, on the contrary, underfitting occurs when a model is too simple and fails to capture the underlying relationship in the data, it is characterized by poor performance in the training error.
+\section{Overfitting and Underfitting}
+Hypothesis spaces are often \textbf{nested}. Let $\mathcal{H}^{(n)}$ be the set of polynomials of degree at most $n$ in the feature $x$. Every polynomial of degree $n-1$ is also a polynomial of degree $n$ (with leading coefficient $0$), and linear maps are polynomials of degree $1$, so
+\[
+\mathcal{H}^{(1)} \subseteq \mathcal{H}^{(2)} \subseteq \dots \subseteq \mathcal{H}^{(n)} \subseteq \dots
+\]
+A larger space contains all the hypotheses of the smaller ones, so the smallest training error we can reach can only \textbf{decrease (or stay equal)} as $n$ grows. In the extreme case it becomes zero: \textbf{any $m$ data points with distinct feature values can be fitted perfectly by a polynomial of degree $n \geq m-1$}. For example, the $m=3$ points $(0,1)$, $(1,3)$, $(2,2)$ are fitted exactly by the parabola $h(x) = 1 + 3.5x - 1.5x^2$ (degree $2 = m-1$), whose training error is $0$. However, driving the training error to zero is not a good idea, since it leads to \textbf{overfitting}.
 
-It is like our trained model h function is so fixed on the training data that any new data different from it may be badly classified.\\
-Since as we have seen only considering the train error can mislead, the concept of Validation is needed.
+\textbf{Overfitting} happens when a model performs very well on the training data but poorly on new, unseen data. High-degree polynomials are the typical case: they bend to pass through every training point, noise included. \textcolor{red}{A small training error does not guarantee good performance on new data points}: it only indicates that we have solved the ERM optimization problem, i.e. that $\widehat{h}$ minimizes the empirical risk on the training set. On the contrary, \textbf{underfitting} occurs when the model is too simple to capture the underlying relationship between features and label: its error is high \emph{already on the training set}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_7/fit_degrees.png}
+    \caption{Predicting the queueing delay of a link from its utilization: polynomials of degree 1, 3 and 12 learnt on the same 15 training points. $E_t$ and $E_v$ are the training and validation errors defined in the next section.}
+\end{figure}
+
+The figure shows a networking example: predicting the average queueing delay of a link from its utilization. The delay grows slowly at low load and explodes as the link approaches saturation. A straight line (degree 1) cannot follow this curve and underfits. Degree 3 follows it well. Degree 12 passes almost exactly through the training points ($E_t = 0.07$) but oscillates wildly between them, and its error on new points is $E_v = 12.57$, about 180 times larger. The overfitted hypothesis is like a student who memorizes the solutions of past exams instead of understanding the subject: perfect on the questions already seen, lost on new ones.
+
+\subsection{Bias and Variance}
+Overfitting and underfitting are two faces of the same trade-off. Imagine repeating the learning many times, each time on a different random training set drawn from $p(\mathbf{x},y)$, and looking at the hypotheses $\widehat{h}$ we obtain:
+\begin{itemize}
+    \item \textbf{Bias}: how far the \emph{average} learnt hypothesis is from the true relation. A model that is too simple is wrong in a systematic way, whatever training set we give it (underfitting).
+    \item \textbf{Variance}: how much $\widehat{h}$ \emph{changes} from one training set to another. A model that is too flexible follows the noise of each particular training set (overfitting).
+\end{itemize}
+For the squared error loss, assume that the label is $y = h^{*}(\mathbf{x}) + \varepsilon$, where $h^{*}$ is the true (unknown) relation and $\varepsilon$ is a zero-mean noise with variance $\sigma^2$. The expected error of the learnt hypothesis on a new data point with features $\mathbf{x}$ splits into three terms:
+\[
+\mathrm{E}\big[(y-\widehat{h}(\mathbf{x}))^2\big] =
+\underbrace{\big(\mathrm{E}[\widehat{h}(\mathbf{x})]-h^{*}(\mathbf{x})\big)^2}_{\text{bias}^2}
++ \underbrace{\mathrm{E}\big[(\widehat{h}(\mathbf{x})-\mathrm{E}[\widehat{h}(\mathbf{x})])^2\big]}_{\text{variance}}
++ \underbrace{\sigma^2}_{\text{noise}}
+\]
+Here $\mathrm{E}[\cdot]$ averages over the random training sets and over the noise, and $\mathrm{E}[\widehat{h}(\mathbf{x})]$ is the average prediction. The \textbf{bias}$^2$ is the squared distance of the average prediction from the truth $h^{*}(\mathbf{x})$, the \textbf{variance} is the spread of the predictions around their average, and $\sigma^2$ is the noise in the labels, which no model can remove. Increasing the complexity lowers the bias but raises the variance: the best model balances the two.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_7/errors_vs_degree.png}
+    \caption{Left: training and validation error of the queueing delay example versus the polynomial degree (median over 400 random training sets of 30 points). The training error keeps decreasing, the validation error is U-shaped. Right: the bias-variance trade-off behind the U shape (schematic).}
+\end{figure}
+
+Since, as we have seen, the training error alone can mislead, we need a way to probe the learnt hypothesis outside the training set: this is \textbf{validation}.
 
 \section{Validation}
 
-The basic idea behind Validation is to divide the initial dataset into two subsets:
+The basic idea behind validation is to \textbf{keep aside some data points that ERM never sees}, and use them to estimate how the learnt hypothesis behaves on new data:
+\begin{enumerate}
+    \item randomly split the dataset $\mathcal{D}$ into a \textbf{training set} $\mathcal{D}^{(\mathrm{train})}$ with $m_t$ points and a \textbf{validation set} $\mathcal{D}^{(\mathrm{val})}$ with $m_v$ points (e.g. 80\% and 20\%);
+    \item use the training set to learn $\widehat{h}$ by ERM;
+    \item use the validation set to probe $\widehat{h}$ outside the training set, in order to estimate its expected loss.
+\end{enumerate}
+The two sets give two errors:
+\[
+E_t = \frac{1}{m_t}\sum_{(\mathbf{x},y)\in\mathcal{D}^{(\mathrm{train})}} L\big((\mathbf{x},y),\widehat{h}\big),
+\qquad
+E_v = \frac{1}{m_v}\sum_{(\mathbf{x},y)\in\mathcal{D}^{(\mathrm{val})}} L\big((\mathbf{x},y),\widehat{h}\big).
+\]
+The \textbf{training error} $E_t$ is the average loss of $\widehat{h}$ on the $m_t$ points used to learn it, i.e. the empirical risk minimized by ERM. The \textbf{validation error} $E_v$ is the average loss of the same $\widehat{h}$ on the $m_v$ points kept aside. The validation points are i.i.d. samples of $p(\mathbf{x},y)$ and $\widehat{h}$ was learnt without them, so $E_v$ is a fair estimate of the expected risk of $\widehat{h}$. $E_t$ is instead too optimistic, because $\widehat{h}$ was chosen precisely to make it small.
+
+In this way the hypothesis still learns on the training set, but its quality is assessed on the validation data. To compare several candidate models, we first run ERM on the training set for each of them, then compute their validation errors, and finally choose the model with the \textbf{smallest validation error}.
+
+Comparing the two errors also tells us what is going wrong:
 \begin{itemize}
-    \item Training and Validation Set.
-    \item Use Training Set to learn a hypothesis h
-    \item Use Validation Set to probe outside the training set in order to estimate the expected loss.
+    \item \textbf{Overfitting}: the model performs much better on the training set than on the validation set ($E_v \gg E_t$).
+    \item \textbf{Underfitting}: more or less the same performance on the two sets, but poor on both, since the model is not complex enough to capture the relation between features and label.
 \end{itemize}
 
-In this way, h will still learn on the training set but the ERM performance will be assessed on the Validation Data. Therefore, we will choose our model via the validation error. Firstly, the ERM is performed on the training set, then it is also assessed on the validation error. The end-goal is to select the model that minimizes the training error and has the smallest validation error.
+\begin{center}
+    \begin{tabular}{l|c|c|l}
+        & \textbf{Training $E_t$} & \textbf{Validation $E_v$} & \textbf{What to do} \\ \hline
+        Underfitting & high & high, $\approx E_t$  & richer model or features \\
+        Overfitting  & low  & $\gg E_t$             & simpler model, more data \\
+        Good fit     & low  & low, just above $E_t$ & keep the model \\
+    \end{tabular}
+\end{center}
 
-\begin{itemize}
-    \item Overfitting: model performs much better on the training set than on the validation set.
-    \item Underfitting: more or less same performance, but really low since the model is not complex enough to learn the best h.
-\end{itemize}
+In the queueing delay example, degree 1 gives $E_t = 3.75$ and $E_v = 3.10$ (both high: underfitting), degree 12 gives $E_t = 0.07$ and $E_v = 12.57$ (overfitting), degree 3 gives $E_t = 0.78$ and $E_v = 0.68$ (good fit). Note that $E_v$ can even be slightly smaller than $E_t$: with only 15 validation points, chance plays a role.
 
-It may happen that when splitting into training and validation set we encounter an unlucky split, leading to non optimal results. To tackle this issue, \textbf{k-fold cross validation} is exploited.
+This is also the weak point of a single split. The validation error depends on which points end up in the validation set, and with a small dataset an \textbf{unlucky split} can give misleading results. With $m = 50$ points and 20\% for validation, $E_v$ is the average over only 10 points: if, by chance, they are all low-load measurements, which are easy to predict, the model looks much better than it is. To tackle this issue, \textbf{K-fold cross validation} is used.
 
 \section{K-Fold Cross Validation}
 
-Since we might be unlucky with the train-val split and this is really problematic for small datasets, the concept of K-Fold Cross Validation is to randomly split train-val several times, in order to average out the unlucky splits. The splits will be performed K times.
-
-In K-Fold Cross Validation the training error and the validation error are the average empirical loss over the k training folds. In order to optimally select the K number of folds, the train fold should be sufficiently large to avoid overfitting and the validation folds should be sufficiently large to get reliable estimate of generalization.\\
-\underline{Warning}: K-Fold works if the data is i.i.d. and the order of data points is arbitrary, however in the case of grouped or ordered data points this is not true, hence k-fold might fail in this case.\\
-For unbalanced datasets in classes or groups the StratifiedKFold and GroupKFold functions are needed.
-
-\subsection{Test Set}
-
-Additionally, we need a test set different from training and validation set, since the real valid error might not be that optimistic anymore, as validation error is a poor performance indication. There might be some noise, it might be too optimistic since it is chosen with smallest loss.
-
-\subsection{Model Selection Recipe}
-
+Since we might be unlucky with a single training-validation split, and this is really problematic for small datasets, \textbf{K-fold cross validation} repeats the split $K$ times in a systematic way and averages out the unlucky splits:
 \begin{itemize}
-    \item Input: list of candidate models
-    \item For each candidate model:
+    \item the dataset is divided into $K$ disjoint subsets of (almost) equal size $m/K$, called \textbf{folds};
+    \item in iteration $k$, fold $k$ is the validation set and the other $K-1$ folds form the training set;
+    \item after $K$ iterations, every data point has been used \textbf{once for validation} and $K-1$ times for training.
+\end{itemize}
+The training error and the validation error are the averages over the $K$ iterations:
+\[
+E_t = \frac{1}{K}\sum_{k=1}^{K} E_t^{(k)}, \qquad E_v = \frac{1}{K}\sum_{k=1}^{K} E_v^{(k)}
+\]
+where $\widehat{h}^{(k)}$ is the hypothesis learnt by ERM in iteration $k$, $E_t^{(k)}$ is its training error on the $K-1$ training folds and $E_v^{(k)}$ is its validation error on fold $k$. Averaging over $K$ different validation folds removes most of the luck of a single split.
+
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+\textbf{Algorithm: K-fold cross validation}\\
+\textbf{Input:} dataset $\mathcal{D}$ with $m$ points, model $\mathcal{H}$, loss $L$, number of folds $K$\\
+\textbf{Output:} training error $E_t$ and validation error $E_v$ of the model
+\begin{enumerate}
+    \item Shuffle $\mathcal{D}$ randomly and split it into $K$ disjoint folds $\mathcal{D}_1,\dots,\mathcal{D}_K$ of about $m/K$ points.
+    \item For $k = 1,\dots,K$:
     \begin{enumerate}
-        \item Learn optimal h by minimizing the training error.
-        \item Compute the validation error on the validation set.
+        \item training set $\mathcal{D}^{(\mathrm{train})} = \mathcal{D} \setminus \mathcal{D}_k$, validation set $\mathcal{D}^{(\mathrm{val})} = \mathcal{D}_k$;
+        \item learn $\widehat{h}^{(k)}$ by ERM on $\mathcal{D}^{(\mathrm{train})}$ and compute its training error $E_t^{(k)}$;
+        \item compute its validation error $E_v^{(k)}$ on $\mathcal{D}_k$.
     \end{enumerate}
-    \item Choose h with minimum validation error.
-    \item Compute test error on test set.
+    \item Return $E_t = \frac{1}{K}\sum_{k} E_t^{(k)}$ and $E_v = \frac{1}{K}\sum_{k} E_v^{(k)}$.
+\end{enumerate}}}
+\end{center}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_7/holdout_kfold.png}
+    \caption{Top: hold-out validation with a single split. Bottom: 5-fold cross validation; each fold is used once for validation, and the test set is kept aside for the final estimate.}
+\end{figure}
+
+For example, take $m = 100$ labelled flows and $K = 5$: each fold contains 20 flows and each $\widehat{h}^{(k)}$ is learnt on the other 80. If the five validation errors are $0.12$, $0.09$, $0.15$, $0.10$ and $0.14$, then
+\[
+E_v = \frac{0.12 + 0.09 + 0.15 + 0.10 + 0.14}{5} = \frac{0.60}{5} = 0.12 .
+\]
+A single hold-out split could have reported anything between $0.09$ and $0.15$, depending on luck.
+
+\subsection{Choosing K}
+To choose the number of folds $K$, two requirements must be balanced: the training folds should be large enough to learn a good hypothesis (and to avoid overfitting), and the validation folds should be large enough to give a reliable estimate of the generalization error. Each training set contains $\frac{K-1}{K}\,m$ points, each validation fold $\frac{m}{K}$ points, and the model is trained $K$ times. Common choices are $K = 5$ or $K = 10$. The extreme case $K = m$, where each fold is a single data point, is called \textbf{leave-one-out cross validation} (LOOCV).
+
+\begin{center}
+    \begin{tabular}{l|c|c|l}
+        & \textbf{Trainings} & \textbf{Training set} & \textbf{Use when} \\ \hline
+        Hold-out          & $1$   & $m_t$               & large dataset, costly training \\
+        K-fold            & $K$   & $\frac{K-1}{K}\,m$  & small or medium dataset \\
+        LOOCV ($K = m$)   & $m$   & $m-1$               & tiny dataset, cheap model \\
+    \end{tabular}
+\end{center}
+With $m = 100$: $K = 5$ means 5 trainings on 80 points, $K = 10$ means 10 trainings on 90 points, LOOCV means 100 trainings on 99 points.
+
+\subsection{Non-i.i.d. Data}
+\underline{Warning}: K-fold works if the data points are i.i.d. and their order is arbitrary, so that any split is as good as any other. With \textbf{grouped} or \textbf{ordered} data points this is not true, and plain K-fold can give a misleading validation error; the same holds for strongly \textbf{imbalanced} classes. Scikit-learn provides a dedicated splitter for each case:
+\begin{itemize}
+    \item \textbf{StratifiedKFold} (imbalanced classes): each fold keeps the class proportions of the whole dataset. In anomaly detection, where attacks may be 1\% of the flows, a plain split can produce folds with no anomaly at all, on which the errors on the minority class cannot be measured.
+    \item \textbf{GroupKFold} (grouped data): all the data points of the same group end up in the same fold. Packets of the same flow, or flows of the same host, are strongly correlated: if some of them are in training and others in validation, the model can recognize the flow (same addresses and ports) instead of learning the traffic class, and $E_v$ becomes optimistic.
+    \item \textbf{TimeSeriesSplit} (ordered data): the model is always trained on the past and validated on the future. In traffic forecasting, shuffling would let the model ``see the future'' and would hide the drift of the traffic over time.
 \end{itemize}
 
-To sum up, ML methods using large models tend to overfit. It is needed to probe the learnt hypothesis outside the training set by validating it on the validation set. Pick the model with minimum validation error. Finally, compute the test error for the chosen model.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_7/cv_splitters.png}
+    \caption{Four splitters on 40 packets ordered in time, belonging to 8 flows, with 4 anomalous packets at the end of the capture. Plain KFold puts all the anomalies in one fold, StratifiedKFold spreads them, GroupKFold never splits a flow, TimeSeriesSplit trains only on the past.}
+\end{figure}
+
+The same principle applies to pre-processing. Every quantity learnt from data, such as the mean and standard deviation used for standardization or the principal components of PCA, must be computed on the training folds only and then applied to the validation fold. Computing it on the whole dataset lets information from the validation set leak into training (\textbf{data leakage}) and makes $E_v$ optimistic.
+
+\section{Test Set}
+
+Additionally, we need a \textbf{test set}, disjoint from both the training and the validation set. The reason is subtle. The validation error is a fair estimate of the error of \emph{one fixed} hypothesis, but once we use it to \emph{choose} among many candidates, the validation error of the winner becomes \textbf{too optimistic}. The winner is selected because its validation error is the smallest, and part of that small value is luck: noise in the finite validation set that happens to favour it.
+
+For example, suppose we compare 20 classifiers that are all equally good, with a true error rate of $0.20$, on a validation set of $m_v = 100$ flows. Each validation error fluctuates around $0.20$ by about $0.04$, and the smallest of 20 such values is on average about $0.13$: we would report 13\% while the real error is 20\%. With $m_v = 1000$ the optimism shrinks (about $0.18$) but does not disappear. A test set never used before gives an unbiased estimate: $0.20$ on average.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/chapter_7/selection_bias.png}
+    \caption{Optimism of the validation error (simulation): the more candidates we compare, the lower the validation error of the selected one, although all of them have true error $0.20$. A fresh test set does not have this bias.}
+\end{figure}
+
+\textcolor{red}{The test set must be set aside before any training or selection and used only once, at the very end.} If we look at the test error and then go back to change the model, the test set becomes another validation set and its estimate is no longer unbiased. Typical splits are 60/20/20 (training/validation/test) or, with K-fold, 80\% for cross validation and 20\% for test. In networking it is also good practice to build the test set from conditions close to deployment, for instance traffic captured on a different day than the training data.
+
+\section{Model Selection Recipe}
+Putting everything together, model selection follows the recipe below. The candidate models can differ in any design choice: the polynomial degree, the set of features, the depth of a tree, or any other hyperparameter.
+
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+\textbf{Algorithm: model selection by validation}\\
+\textbf{Input:} list of candidate models $\mathcal{H}^{(1)},\dots,\mathcal{H}^{(J)}$, dataset $\mathcal{D}$, loss $L$\\
+\textbf{Output:} selected hypothesis $\widehat{h}$ and its test error
+\begin{enumerate}
+    \item Set aside a test set; split the remaining points into a training and a validation set (or into $K$ folds).
+    \item For each candidate model $\mathcal{H}^{(j)}$, $j = 1,\dots,J$:
+    \begin{enumerate}
+        \item learn the optimal $\widehat{h}^{(j)}$ by minimizing the training error (ERM);
+        \item compute its validation error $E_v^{(j)}$ on the validation set (averaged over the $K$ iterations with K-fold).
+    \end{enumerate}
+    \item Choose the model $\widehat{j}$ with the minimum validation error, and its hypothesis $\widehat{h} = \widehat{h}^{(\widehat{j})}$.
+    \item Compute the test error of $\widehat{h}$ on the test set, once.
+\end{enumerate}}}
+\end{center}
+
+A common variant, once the model has been chosen, learns its hypothesis again on training and validation data together before step 4, so that more data are used; the test set stays untouched in any case.
+
+As an example, we select the degree of the queueing delay predictor. Typical values (medians over many simulated datasets, as in the left panel of the bias-variance figure) are:
+\begin{center}
+    \begin{tabular}{l|c|c|c|c|c|c}
+        \textbf{Degree $n$} & 1 & 2 & 3 & 4 & 6 & 12 \\ \hline
+        $E_t$ & 1.70 & 0.74 & 0.55 & 0.50 & 0.45 & 0.32 \\
+        $E_v$ & 2.11 & 0.99 & 0.79 & \textbf{0.77} & 0.86 & 5.93 \\
+    \end{tabular}
+\end{center}
+$E_t$ keeps decreasing with the degree, as expected from nested hypothesis spaces, while $E_v$ is minimal for $n = 4$, which is selected; its test error is then computed once on the test set. Choosing by $E_t$ would have picked $n = 12$, whose validation error is almost eight times larger.
+
+\section{Summary}
+\begin{itemize}
+    \item Hypothesis spaces are often nested: a more complex model can only lower the training error, down to zero, but this leads to \textbf{overfitting}.
+    \item Overfitting: small training error, large validation error (high variance). Underfitting: both errors high and similar (high bias).
+    \item ML methods using large models tend to overfit, so the learnt hypothesis must be probed outside the training set: \textbf{validation} learns on the training set and estimates the error on a validation set.
+    \item Pick the model with the \textbf{minimum validation error}, not the minimum training error.
+    \item \textbf{K-fold cross validation} uses $K$ disjoint folds, each one used once for validation, and averages the errors; for imbalanced, grouped or ordered data use StratifiedKFold, GroupKFold or TimeSeriesSplit.
+    \item Finally, compute the \textbf{test error} of the chosen model on a test set used only once: the validation error of the selected model is optimistic.
+\end{itemize}
+
+
+
+\section{A prova di coglione}
+Con l'ERM sappiamo trovare la migliore ipotesi \emph{dentro} un modello, ma non sappiamo quale modello scegliere: un polinomio di grado 3 o di grado 12? Il training error non può dircelo, perché premia sempre il modello più complesso. Questo capitolo spiega come stimare in modo onesto l'errore su dati nuovi (\textbf{validazione} e \textbf{K-fold}), come usarlo per scegliere il modello e come dare il voto finale (\textbf{test set}).
+
+\subsection{Overfitting e underfitting}
+\paragraph*{L'idea.} Un modello può sbagliare in due modi opposti: è troppo semplice e non segue i dati (\textbf{underfitting}), oppure è così flessibile da imparare a memoria anche il rumore (\textbf{overfitting}).
+
+I modelli sono annidati: una retta è anche un polinomio di grado 2, che è anche di grado 3, e così via. Più il modello è grande, più il training error scende, fino a zero: $m$ punti con $x$ distinte si interpolano sempre con un polinomio di grado $m-1$. Ma azzerare il training error vuol dire imparare a memoria, come lo studente che ricorda le soluzioni degli esami passati e va in crisi alla prima domanda nuova.
+
+Nell'esempio del ritardo in funzione del carico del link: la retta ha $E_t = 3.75$ ed $E_v = 3.10$ (entrambi alti: underfitting); il grado 3 ha $E_t = 0.78$ ed $E_v = 0.68$ (va bene); il grado 12 ha $E_t = 0.07$ ma $E_v = 12.57$ (overfitting).
+
+Dietro c'è il compromesso \textbf{bias-varianza}: l'errore atteso su un dato nuovo è bias$^2$ $+$ varianza $+$ $\sigma^2$. Il bias è la mira sbagliata del modello troppo semplice, la varianza è quanto il modello cambia da un training set all'altro, $\sigma^2$ è il rumore che nessuno può togliere. Aumentare la complessità abbassa il bias e alza la varianza: il modello migliore sta nel mezzo.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_7/errors_vs_degree.png}
+    \caption{Il training error scende sempre col grado, il validation error fa una U: il minimo è il modello da scegliere.}
+\end{figure}
+
+\subsection{Validazione e K-fold}
+\paragraph*{L'idea.} Per sapere come va il modello su dati nuovi, gli nascondiamo una parte dei dati e la usiamo come ``dati nuovi''.
+
+Si divide il dataset in training set ($m_t$ punti) e validation set ($m_v$ punti), per esempio 80/20. Il training error $E_t$ è l'errore medio sui punti con cui il modello ha imparato, il validation error $E_v$ è l'errore medio dello stesso modello sui punti che non ha mai visto. Solo $E_v$ è una stima onesta. Per questo \textbf{dentro} ogni modello l'ERM minimizza $E_t$, ma \textbf{tra} i modelli si sceglie quello con $E_v$ minimo. Leggendoli insieme: $E_t$ ed $E_v$ alti e simili indicano underfitting, $E_t$ basso con $E_v$ molto più alto indica overfitting.
+
+Con pochi dati, però, un solo split può essere sfortunato: con 50 punti, $E_v$ è la media di appena 10. La \textbf{K-fold} risolve il problema dividendo i dati in $K$ fold \emph{disgiunti}: a turno ogni fold fa da validation set e gli altri $K-1$ addestrano il modello, poi si fa la media dei $K$ errori, $E_v = \frac{1}{K}\sum_k E_v^{(k)}$. Esempio con $K = 5$: errori $0.12$, $0.09$, $0.15$, $0.10$ e $0.14$ danno $E_v = 0.12$, mentre un solo split avrebbe potuto dire $0.09$ o $0.15$. Di solito si usa $K = 5$ o $10$; con $K = m$ si ottiene il leave-one-out.
+
+La K-fold standard presuppone dati i.i.d. Nel traffico di rete spesso non lo sono, e allora si usano split dedicati:
+\begin{itemize}
+    \item \textbf{StratifiedKFold} per le classi sbilanciate (attacchi rari): ogni fold mantiene le proporzioni delle classi;
+    \item \textbf{GroupKFold} per i dati raggruppati: i pacchetti dello stesso flusso stanno tutti dalla stessa parte;
+    \item \textbf{TimeSeriesSplit} per i dati nel tempo: si addestra sul passato e si valida sul futuro.
+\end{itemize}
+Normalizzazione, PCA e qualunque altra trasformazione si ``imparano'' solo sui dati di training, altrimenti si ha \textbf{data leakage}.
+
+\subsection{Test set e ricetta finale}
+\paragraph*{L'idea.} Il validation set serve per \emph{scegliere}, il test set per dare il \emph{voto finale}.
+
+Il validation error del modello vincitore è ottimista: tra tanti candidati vince anche chi è stato fortunato. Con 20 classificatori ugualmente buoni (errore vero $0.20$) e 100 punti di validazione, il migliore mostra in media $E_v \approx 0.13$, ma su dati nuovi torna a $0.20$. Per questo il test set si mette da parte \textbf{prima} di tutto e si usa \textbf{una volta sola}, alla fine.
+
+La ricetta completa sta in quattro passi: (1) metti da parte il test set; (2) per ogni modello candidato addestra con l'ERM sul training set e calcola $E_v$ (o la sua media con la K-fold); (3) scegli il modello con $E_v$ minimo; (4) calcola il suo test error, una volta sola.
+
+\subsection{Da sapere per l'esame}
+\begin{center}
+    \begin{tabular}{l|l}
+        \textbf{Concetto} & \textbf{In una riga} \\ \hline
+        Spazi annidati   & più complessità: il training error minimo non sale mai \\ \hline
+        Interpolazione   & $m$ punti con $x$ distinte: grado $m-1$ dà $E_t = 0$ \\ \hline
+        Overfitting      & $E_t$ basso, $E_v \gg E_t$ (alta varianza) \\ \hline
+        Underfitting     & $E_t$ ed $E_v$ alti e simili (alto bias) \\ \hline
+        Bias-varianza    & errore atteso $=$ bias$^2$ $+$ varianza $+$ $\sigma^2$ \\ \hline
+        Model selection  & si sceglie con $E_v$, mai con $E_t$ \\ \hline
+        K-fold           & $K$ fold disgiunti, ognuno valida una volta \\ \hline
+        Media K-fold     & $E_v = \frac{1}{K}\sum_{k} E_v^{(k)}$; di solito $K = 5$ o $10$ \\ \hline
+        Dati non i.i.d.  & classi: Stratified; gruppi: Group; tempo: TimeSeriesSplit \\ \hline
+        Test set         & messo da parte all'inizio, usato una volta sola \\
+    \end{tabular}
+\end{center}

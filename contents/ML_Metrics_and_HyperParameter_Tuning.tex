@@ -1,22 +1,33 @@
 \chapter{ML Metrics and HyperParameter Tuning}
 
+In the previous chapter we compared models through their validation error. This chapter answers two practical questions: \textbf{which number} should we compute to judge a model, and how do we choose the settings of a model that ERM does not learn, the \textbf{hyper-parameters}.
+
 \section{Performance Metrics}
 
-Losses are for machines, while it is needed to define metrics for humans. Metrics are a measure of quality and can be exploited in order to choose the hyper-parameters of a model.
+\textbf{Losses are for machines, while metrics are needed for humans.} The loss is what ERM minimizes, so it must be easy to optimize (ideally convex and differentiable, as seen in the Empirical Risk chapter). A \textbf{metric} is what we report and use to compare models, so it must be easy to interpret and must reflect what matters in the application. The two can differ: a classifier can be trained with the logistic loss and evaluated with its accuracy. In an intrusion detection system (IDS), for instance, a missed attack and a false alarm have very different costs, and the metric must tell them apart. Metrics are a measure of quality, and they are used to compare models and to choose their hyper-parameters.
 
 \subsection{Evaluation of supervised ML}
-
+Besides the correctness of its predictions, a supervised model is judged on:
 \begin{itemize}
-    \item Efficiency: model building time, prediction time.
-    \item Scalability: training set size, attribute number.
-    \item Robustness: noise, missing data.
-    \item Interpretability: model interpretability, model compactness.
+    \item \textbf{Efficiency}: model building time, prediction time. A traffic classifier running on a router must predict at line rate.
+    \item \textbf{Scalability}: training set size, attribute number.
+    \item \textbf{Robustness}: noise, missing data.
+    \item \textbf{Interpretability}: model interpretability, model compactness. A network operator wants to know \emph{why} a flow was flagged.
 \end{itemize}
-These are independent from the correctness of the resulting $y'$ labels.
+These are independent from the correctness of the resulting $y'$ labels. The rest of the chapter deals with correctness, i.e. with how close the predictions $y'$ are to the true labels $y$.
 
 \subsection{Evaluation of Regression Techniques}
 
-The quality of the prediction is assessed through loss functions such as mean squared error, mean absolute error and other ones.
+The quality of the prediction is assessed through loss functions computed on the $m$ data points of the validation (or test) set:
+\begin{align*}
+    \text{MSE} &= \frac{1}{m}\sum_{i=1}^{m} \big(y^{(i)} - {y'}^{(i)}\big)^2, &
+    \text{RMSE} &= \sqrt{\text{MSE}}, \\[4pt]
+    \text{MAE} &= \frac{1}{m}\sum_{i=1}^{m} \big|y^{(i)} - {y'}^{(i)}\big|, &
+    R^2 &= 1 - \frac{\sum_{i}\big(y^{(i)} - {y'}^{(i)}\big)^2}{\sum_{i}\big(y^{(i)} - \bar{y}\big)^2}.
+\end{align*}
+Here $y^{(i)}$ is the true label of point $i$, ${y'}^{(i)}$ its prediction and $\bar{y}$ the mean of the true labels. The \textbf{mean squared error} (MSE) is the average squared error and is measured in squared units; its square root, the \textbf{RMSE}, and the \textbf{mean absolute error} (MAE) are in the same unit as $y$, so they are easier to read. The \textbf{coefficient of determination} $R^2$ compares the model with the trivial predictor that always outputs $\bar{y}$: $R^2 = 1$ means perfect predictions, $R^2 = 0$ means no better than the mean.
+
+For example, a model predicts the round-trip time of three connections whose true values are $10$, $20$ and $30$ ms as $12$, $18$ and $33$ ms. The errors are $2$, $-2$ and $3$ ms, so $\text{MSE} = (4+4+9)/3 = 5.67\ \text{ms}^2$, $\text{RMSE} = 2.38$ ms, $\text{MAE} = 7/3 = 2.33$ ms and, with $\bar{y} = 20$ ms, $R^2 = 1 - 17/200 = 0.915$.
 
 \section{Evaluation of Classification Techniques}
 
@@ -25,12 +36,13 @@ The quality of the prediction can be assessed through:
     \item Confusion Matrix.
     \item Accuracy.
     \item Precision, Recall, F-measure per class and on average.
-    \item ROC curve and other metrics.
+    \item ROC curve and other metrics, such as the precision-recall curve.
 \end{itemize}
+In the examples, the \textbf{positive} class is the one we want to detect (e.g. an attack) and the \textbf{negative} class is everything else (e.g. normal traffic).
 
 \subsection{Confusion Matrix}
 
-The Confusion Matrix is used to evaluate a classification task implemented by binary classifiers. It is built as follows:
+The Confusion Matrix counts, for each actual class, how many objects are predicted in each class. For a binary classifier it is built as follows:
 \begin{itemize}
     \item Rows: Actual Class
     \item Columns: Predicted Class
@@ -39,6 +51,7 @@ The Confusion Matrix is used to evaluate a classification task implemented by bi
     \item FP: False Positives when $y'$ is positive while $y$ is negative.
     \item FN: False Negatives when $y'$ is negative while $y$ is positive.
 \end{itemize}
+A simple way to remember the names: the second word is the \emph{predicted} class, the first word says whether the prediction is correct. A false positive is a false alarm, a false negative is a missed detection.
 
 \begin{table}[h]
     \centering
@@ -50,7 +63,15 @@ The Confusion Matrix is used to evaluate a classification task implemented by bi
     \caption{Confusion Matrix}
 \end{table}
 
-It can go up to $(n \times n)$. The correctly predicted values are always on the diagonal.
+The same construction works for any number of classes: with $C$ classes the matrix is $C \times C$. The correctly predicted values are always on the diagonal, while the off-diagonal cells show which classes are confused with which.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/confusion_matrices.png}
+    \caption{Left: confusion matrix of an IDS on 1000 flows, 50 of which are attacks. Right: confusion matrix of a traffic classifier with three classes; colours show the share of each actual class.}
+\end{figure}
+
+In the IDS on the left, 40 of the 50 attacks are detected (TP) and 10 are missed (FN), while 30 of the 950 normal flows raise a false alarm (FP) and 920 are correctly ignored (TN). In the traffic classifier on the right, most errors are between video and the other classes: 8 web flows are labelled as video, and 6 VoIP flows are labelled as video.
 
 \subsection{Accuracy}
 
@@ -62,12 +83,15 @@ For binary classifiers:
 \[
 \text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
 \]
+For the IDS above, $\text{Accuracy} = (40 + 920)/1000 = 0.96$.
 
 In addition accuracy has the following properties:
 \begin{itemize}
-    \item Accuracy is related to the 0/1 loss: it goes as $1 -$ (0/1 loss value).
+    \item Accuracy is related to the 0/1 loss: it is $1$ minus the average 0/1 loss over the evaluated objects, i.e. $1 -$ (fraction of errors).
     \item Accuracy might be misleading in case of unbalanced classes or different class relevance and importance. Therefore, specific class measures are defined.
 \end{itemize}
+
+The second point is the \textbf{accuracy paradox}. A trivial ``IDS'' that labels every flow as normal has $TP = 0$, $FN = 50$, $FP = 0$, $TN = 950$, hence an accuracy of $0.95$: almost the same as the real IDS, although \textcolor{red}{it never detects a single attack}. With rare positives, accuracy is dominated by the large negative class.
 
 \subsection{Class Specific Measures}
 
@@ -77,6 +101,7 @@ Class specific measures need to be evaluated separately for each class $c$. They
     \text{Recall}(c) \quad r &= \frac{\text{Number of objects correctly assigned to } c}{\text{Number of objects belonging to } c} \\[4pt]
     \text{F-measure}(c) \quad F &= \frac{2rp}{r + p}
 \end{align*}
+The two measures answer two different questions. \textbf{Precision} looks at the objects \emph{assigned} to $c$ and asks how many of them really belong to $c$: for an IDS, how many alarms are real attacks. \textbf{Recall} looks at the objects that \emph{belong} to $c$ and asks how many of them were found: how many attacks were caught. The \textbf{F-measure} is their harmonic mean, which is low as soon as one of the two is low: with $p = 1$ and $r = 0.1$ the arithmetic mean would be $0.55$, while $F = 2 \cdot 0.1/1.1 = 0.18$.
 
 For a binary classification problem the following are the simplified formulas for the \underline{positive} class $c$:
 \begin{align*}
@@ -84,33 +109,181 @@ For a binary classification problem the following are the simplified formulas fo
     \text{Recall (True Positive Rate)} \quad r &= \frac{TP}{TP + FN} \\[4pt]
     \text{F-measure} \quad F &= \frac{2rp}{r + p} = \frac{2TP}{2TP + FP + FN}
 \end{align*}
+For the IDS above, $p = 40/70 = 0.57$, $r = 40/50 = 0.80$ and $F = 80/120 = 0.67$: the IDS catches 80\% of the attacks, but only 57\% of its alarms are real. The trivial classifier that never raises an alarm has $r = 0$ and $F = 0$, so these measures expose what accuracy was hiding.
+
+\paragraph{Averages over the classes.} With $C$ classes we get one precision, recall and F-measure per class. They can be summarized as:
+\begin{itemize}
+    \item \textbf{macro average}: the plain mean over the classes, e.g. $F_{\text{macro}} = \frac{1}{C}\sum_{c} F(c)$. Every class counts the same, so small classes weigh as much as large ones;
+    \item \textbf{weighted average}: each class is weighted by its number of objects (its \emph{support});
+    \item \textbf{micro average}: TP, FP and FN are summed over all classes before applying the formulas; when each object has exactly one label, the micro-averaged precision, recall and F-measure are all equal to the accuracy.
+\end{itemize}
+For the traffic classifier of the figure:
+\begin{center}
+    \begin{tabular}{l|c|c|c|c}
+        \textbf{Class} & \textbf{Precision} & \textbf{Recall} & \textbf{F-measure} & \textbf{Support} \\ \hline
+        web   & $90/98 = 0.92$ & $90/100 = 0.90$ & 0.91 & 100 \\
+        video & $50/64 = 0.78$ & $50/60 = 0.83$  & 0.81 & 60 \\
+        VoIP  & $32/38 = 0.84$ & $32/40 = 0.80$  & 0.82 & 40 \\ \hline
+        macro average    & 0.85 & 0.84 & 0.85 & \\
+        weighted average & 0.86 & 0.86 & 0.86 & \\
+    \end{tabular}
+\end{center}
+The accuracy is $172/200 = 0.86$. The macro average is lower because it gives the small classes (video and VoIP), which are recognized worse, the same weight as web. Use it when the rare classes matter.
+
+\paragraph{The precision-recall trade-off.} Many classifiers output a score, e.g. the posterior probability $P(+|\mathbf{x})$, and predict the positive class when the score is above a \textbf{threshold} $t$. Lowering $t$ raises more alarms: recall grows, but precision drops because more normal flows are flagged. Raising $t$ does the opposite. In the example below, $t = 0.3$ gives $r = 0.99$ but $p = 0.14$, while $t = 0.7$ gives $p = 0.86$ but $r = 0.55$; the F-measure is maximal ($0.72$) at $t = 0.63$. The right threshold depends on the cost of the two errors: a missed attack may be very expensive, but too many false alarms make the operators ignore the IDS.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/threshold_tradeoff.png}
+    \caption{Left: scores of normal flows and attacks; the shaded areas are the false positives and false negatives for threshold $t = 0.5$. Right: precision, recall and F-measure as the threshold moves, with 5\% attacks.}
+\end{figure}
 
 \subsection{ROC Curve}
 
-The Receiver Operating Characteristic (ROC) was developed for analyzing noisy signals and finding the trade-off between positive hits and false alarms. The ROC curve shows how the FP and TP rates change when changing the decision threshold. In $(0,0)$ we declare everything to be negative class, while in $(1,1)$ everything to be positive class. The diagonal line is random guessing if classes are balanced; below the diagonal line the prediction is opposite of the true class.\\
-It is important to compute the area under the curve (AUC) and choose the model with the largest area.
+The Receiver Operating Characteristic (ROC) was developed for analyzing noisy signals and finding the trade-off between positive hits and false alarms. It uses two rates, each computed inside one class:
+\[
+\text{TPR} = \frac{TP}{TP + FN}, \qquad \text{FPR} = \frac{FP}{FP + TN}.
+\]
+The \textbf{true positive rate} TPR is the recall: the fraction of positives that are detected. The \textbf{false positive rate} FPR is the fraction of negatives that raise a false alarm. For the IDS above, $\text{TPR} = 40/50 = 0.80$ and $\text{FPR} = 30/950 = 0.03$.
 
+The ROC curve shows how the FP and TP rates change when changing the decision threshold: each threshold gives one point (FPR, TPR). In $(0,0)$ we declare everything to be negative class, while in $(1,1)$ everything to be positive class; the ideal classifier sits in $(0,1)$, with all positives detected and no false alarms. The diagonal line is random guessing; below the diagonal line the classifier is worse than random, and inverting its predictions would bring it above the diagonal.
 
-M1 is better for small FPR, while M2 is better for large FPR.
+It is important to compute the \textbf{area under the curve} (AUC) and choose the model with the largest area. The AUC has a simple meaning: it is the probability that a randomly chosen positive gets a higher score than a randomly chosen negative. $\text{AUC} = 1$ is a perfect ranking, $\text{AUC} = 0.5$ is random guessing. The AUC summarizes \emph{all} thresholds, though: when the curves of two models cross, the better model depends on the range of FPR we can accept.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/chapter_8/roc_m1_m2.png}
+    \caption{ROC curves of two models M1 and M2 that cross at $\text{FPR} \approx 0.2$.}
+\end{figure}
+
+M1 is better for small FPR, while M2 is better for large FPR. In the figure, M1 behaves like a signature-based detector: it recognizes 60\% of the attacks with very high confidence but is blind to the others, so its curve rises steeply and then flattens. M2 has the larger area ($0.82$ against $0.80$), but at $\text{FPR} = 1\%$ M1 detects 58\% of the attacks and M2 only 15\%. An IDS that inspects millions of flows can tolerate only a tiny FPR, so here M1 is the right choice despite its smaller AUC.
 
 \textit{How to build ROC curve?}
 \begin{itemize}
-    \item Use a classifier that produces the posterior probability $P(+|x)$ for each sample $x$.
-    \item Apply a threshold at each unique value of $P(+|x)$.
-    \item Compute TPR and FPR at each threshold.
+    \item Use a classifier that produces the posterior probability $P(+|x)$ for each sample $x$, and sort the samples by decreasing $P(+|x)$.
+    \item Apply a threshold at each unique value of $P(+|x)$: the samples with $P(+|x) \geq t$ are predicted positive.
+    \item Compute TPR and FPR at each threshold, and join the points starting from $(0,0)$.
 \end{itemize}
-Since in the example we have 10 samples, $m = 10$ columns. We need to order them according to probability horizontally.
+
+In the example we have 10 samples, $m = 10$: 5 attacks ($+$) and 5 normal flows ($-$). We need to order them according to probability; in the course the samples are arranged horizontally in $m = 10$ columns, here one row per sample. Each row uses as threshold $t$ the score of that sample:
+\begin{center}
+    \begin{tabular}{c|c|c|c|c|c|c|c}
+        \textbf{$t = P(+|\mathbf{x})$} & \textbf{Class} & \textbf{TP} & \textbf{FP} & \textbf{TN} & \textbf{FN} & \textbf{TPR} & \textbf{FPR} \\ \hline
+        0.95 & $+$ & 1 & 0 & 5 & 4 & 0.2 & 0.0 \\
+        0.90 & $+$ & 2 & 0 & 5 & 3 & 0.4 & 0.0 \\
+        0.80 & $-$ & 2 & 1 & 4 & 3 & 0.4 & 0.2 \\
+        0.70 & $+$ & 3 & 1 & 4 & 2 & 0.6 & 0.2 \\
+        0.60 & $+$ & 4 & 1 & 4 & 1 & 0.8 & 0.2 \\
+        0.55 & $-$ & 4 & 2 & 3 & 1 & 0.8 & 0.4 \\
+        0.45 & $-$ & 4 & 3 & 2 & 1 & 0.8 & 0.6 \\
+        0.40 & $+$ & 5 & 3 & 2 & 0 & 1.0 & 0.6 \\
+        0.30 & $-$ & 5 & 4 & 1 & 0 & 1.0 & 0.8 \\
+        0.10 & $-$ & 5 & 5 & 0 & 0 & 1.0 & 1.0 \\
+    \end{tabular}
+\end{center}
+Every time the threshold passes a positive the curve moves up by $1/P = 0.2$, every time it passes a negative it moves right by $1/N = 0.2$. The area under the resulting staircase is
+\[
+\text{AUC} = 0.2 \cdot 0.4 + 0.4 \cdot 0.8 + 0.4 \cdot 1.0 = 0.08 + 0.32 + 0.40 = 0.80 .
+\]
+The same value comes from the probabilistic meaning: of the $5 \times 5 = 25$ (attack, normal) pairs, 20 have the attack ranked higher, and $20/25 = 0.80$.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.45\textwidth]{images/chapter_8/roc_example.png}
+    \caption{ROC curve of the 10-sample example; each point is labelled with its threshold.}
+\end{figure}
+
+\subsection{Precision-Recall Curve}
+When positives are rare, the ROC curve can look excellent even if most alarms are false. FPR divides the false alarms by the number of negatives, which is huge: with 2\% attacks in 10\,000 flows, $\text{FPR} = 5\%$ looks small but means 490 false alarms against at most 200 real attacks, so precision is at most $200/690 = 0.29$. The \textbf{precision-recall (PR) curve} plots precision against recall for every threshold, and is summarized by the \textbf{average precision} (AP), the area under it. A random classifier has precision equal to the share of positives, so the PR baseline moves with the class balance, while the ROC diagonal does not.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/roc_vs_pr.png}
+    \caption{The same score distributions with 50\% and 2\% attacks: the ROC curves (and AUC) are almost identical, the precision-recall curves are not.}
+\end{figure}
+
+The figure uses the same classifier on two datasets: the AUC is $0.92$ with balanced classes and $0.93$ with 2\% attacks, but the AP drops from $0.92$ to $0.35$. For rare events such as attacks or failures, the PR curve gives the more honest picture. All the classification metrics of this section are collected in the table ``Classification metrics at a glance'' ($m = TP+TN+FP+FN$ is the number of evaluated objects).
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{l|c|l}
+        \textbf{Metric} & \textbf{Formula} & \textbf{What it measures} \\ \hline
+        Accuracy    & $(TP+TN)/m$ & share of correct predictions \\
+        Precision   & $TP/(TP+FP)$ & share of alarms that are real \\
+        Recall, TPR & $TP/(TP+FN)$ & share of positives caught \\
+        FPR         & $FP/(FP+TN)$ & share of negatives flagged \\
+        F-measure   & $2rp/(r+p)$ & balance of $p$ and $r$ \\
+        ROC AUC     & area under ROC & ranking quality, all thresholds \\
+        AP          & area under PR & quality on a rare positive class \\
+    \end{tabular}
+    \caption{Classification metrics at a glance}
+\end{table}
 
 
 \subsection{Learning Curve}
-The Learning Curve shows how a metric, or loss, changes with varying training sample size. It is possible to use different losses for training and validation, and this enables the comparison of different ML methods. It is a tool to find out how much we benefit from adding more training data.
+The Learning Curve shows how a metric, or loss, changes with varying training sample size: the model is trained on training sets of increasing size $m_t$, and the metric is computed both on the training set and on the validation set (usually with cross validation). The metric does not have to be the loss minimized by ERM, e.g. accuracy for a classifier trained with the logistic loss, but both curves must use the same one, otherwise they cannot be compared. Plotting the curves of different ML methods with the same metric enables their comparison. It is a tool to find out how much we benefit from adding more training data:
+\begin{itemize}
+    \item \textbf{High bias}: the two curves quickly meet at a low value. The model is too simple, and more data will not help; a richer model or better features are needed.
+    \item \textbf{High variance}: the training curve stays much higher than the validation curve, but the gap shrinks as $m_t$ grows. The model overfits, and more data (or a simpler model) helps.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/learning_curves.png}
+    \caption{Learning curves on a synthetic flow classification dataset. Left: logistic regression reaches a plateau at 0.82 after a few hundred flows. Right: a deep decision tree is perfect on the training set, and its validation accuracy keeps growing with more data.}
+\end{figure}
+
+In the figure, logistic regression reaches an accuracy of about $0.82$ on both curves already with 600 training flows: collecting 10\,000 flows does not change anything. The deep decision tree has training accuracy $1.00$ for any $m_t$, while its validation accuracy grows from $0.73$ with 96 flows to $0.87$ with 9600 flows: here, collecting more labelled traffic is worth the effort.
 
 \section{HyperParameter Tuning}
-Hyper-Parameters are parameters that are \textbf{not directly learnt within estimators}. \textbf{Hyper-Parameters define the model space} and they are passed as arguments to the constructor of the estimator classes in scikit-learn. The aim is to search the hyper-parameters space for the best cross-validation score metric. Hence, hyper-parameters are really important for the final model selection.\\
+Hyper-Parameters are parameters that are \textbf{not directly learnt within estimators}. The \emph{parameters} of a model, e.g. the weights of a linear map, are learnt by ERM from the training data; the \emph{hyper-parameters} are fixed before training. \textbf{Hyper-Parameters define the model space}, or the way the learning algorithm explores it, and they are passed as arguments to the constructor of the estimator classes in scikit-learn, e.g. DecisionTreeClassifier(max\_depth=6).
+
+\begin{center}
+    \begin{tabular}{l|l|l}
+        \textbf{Model} & \textbf{Learnt parameters} & \textbf{Hyper-parameters} \\ \hline
+        Polynomial regr. & coefficients $\mathbf{w}$ & degree $n$ \\
+        Decision tree & splits (feature, threshold) & max\_depth, min\_samples\_leaf \\
+        k-NN & none (stores the data) & $k$, distance \\
+        Neural network & weights & layers, neurons, learning rate \\
+    \end{tabular}
+\end{center}
+
+The aim is to search the hyper-parameters space for the best cross-validation score metric. Each combination of hyper-parameter values is a candidate model, so tuning follows exactly the model selection recipe of the previous chapter: compare the candidates on validation data (or with cross validation) and keep the test set for the final estimate. Hence, hyper-parameters are really important for the final model selection.
+
+\subsection{Validation Curve}
 The \textbf{Validation Curve} can be used to assess the influence of a single hyper-parameter on the training score and the validation score. Hence, it is possible to find out whether the estimator is overfitting or underfitting for some hyper-parameter values.
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/chapter_8/validation_curve.png}
+    \caption{Validation curve of the hyper-parameter max\_depth of a decision tree (synthetic flow classification dataset, 5-fold cross validation).}
+\end{figure}
+
+A learning curve varies the amount of data, while a validation curve varies one hyper-parameter with the data fixed. In the figure, a tree of depth 1 underfits (both accuracies around $0.70$). The validation accuracy peaks at $0.84$ for max\_depth $= 6$. Deeper trees keep improving on the training set, up to $1.00$, while the validation accuracy slowly drops to $0.81$: they overfit.
+
 \subsection{Grid Search}
-Grid Search exhaustively generates candidates from a \textbf{grid of hyper-parameter values}. A different hypothesis is trained for all possible combinations of hyper-parameter values.
+Grid Search exhaustively generates candidates from a \textbf{grid of hyper-parameter values}. A different hypothesis is trained for all possible combinations of hyper-parameter values, and each combination is scored with cross validation. With hyper-parameters taking $V_1, V_2, \dots$ values and $K$ folds, the number of trainings is ${V_1 \cdot V_2 \cdot \ldots \cdot K}$, which grows quickly with the number of hyper-parameters.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/chapter_8/grid_search.png}
+    \caption{Grid search over max\_depth and min\_samples\_leaf of a decision tree; the best cell is highlighted.}
+\end{figure}
+
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+\textbf{Algorithm: grid search with cross validation}\\
+\textbf{Input:} training data, model, a list of values for each hyper-parameter, number of folds $K$\\
+\textbf{Output:} best combination and the model trained with it
+\begin{enumerate}
+    \item Build the grid: all combinations of the listed values.
+    \item For each combination: run K-fold cross validation and store the mean validation score.
+    \item Choose the combination with the best mean validation score.
+    \item Train the model with it on all the training data; evaluate it once on the test set.
+\end{enumerate}}}
+\end{center}
+
+In the figure, 6 values of max\_depth and 5 values of min\_samples\_leaf give 30 combinations, i.e. 150 trainings with $K = 5$. The best one (max\_depth $= 6$, min\_samples\_leaf $= 10$) reaches a mean CV accuracy of $0.848$; on the test set the selected tree scores $0.837$, slightly lower, as expected from the optimism of the selection discussed in the previous chapter. For depth 2 all values of min\_samples\_leaf give the same score: such a shallow tree never produces leaves small enough for that limit to matter. In scikit-learn grid search is implemented by GridSearchCV. When there are many hyper-parameters, \textbf{random search} (RandomizedSearchCV) tries only a fixed number of random combinations, and often finds a comparable result at a fraction of the cost.
 
 \section{Recap}
 To sum up, these are the steps to follow when building an ML process:
@@ -119,11 +292,152 @@ To sum up, these are the steps to follow when building an ML process:
     \item Load/generate datasets.
     \item Choose samples, features and labels.
     \item Split the dataset in training, validation (or later cv) and testing.
-    \item Pre-processing techniques.
+    \item Pre-processing techniques, fitted on the training data only.
     \item Define model and loss.
     \item Perform ERM with an algorithm (learn).
-    \item Evaluate the obtained performance (metrics).
-    \item Tune the hyper-parameters.
-    \item Test the final hypothesis on test data.
+    \item Evaluate the obtained performance (metrics) on the validation data, choosing metrics that reflect the application: precision, recall, F-measure or PR curves when classes are imbalanced, not only accuracy.
+    \item Tune the hyper-parameters (validation curve, grid search with cross validation); use learning curves to decide whether more data would help.
+    \item Test the final hypothesis on test data, once.
     \item Use it in the wild for inference.
 \end{itemize}
+
+
+
+\section{A prova di coglione}
+Hai addestrato un modello. E adesso? Questo capitolo risponde alle quattro domande che ti farai ogni volta: \textbf{quanto è bravo davvero} il mio modello, \textbf{a che soglia} lo faccio lavorare, \textbf{mi conviene raccogliere più dati}, e \textbf{come regolo le sue manopole}, cioè gli iperparametri. Il filo conduttore è uno solo: la loss serve alla macchina per imparare, la metrica serve a noi per decidere. E la metrica giusta dipende da quanto costano i diversi errori: in un sistema di intrusion detection (IDS) un attacco non visto e un falso allarme non pesano affatto uguale.
+
+\subsection{Quanto è bravo il mio modello?}
+\paragraph*{L'idea.} Nella regressione basta chiedersi di quanto sbaglio in media. Nella classificazione si parte sempre da una tabellina di conteggi, la matrice di confusione, da cui escono tutte le metriche. Ogni metrica risponde a una domanda diversa: scegliere la metrica significa scegliere la domanda.
+
+\subsubsection*{1. Regressione: di quanto sbaglio?}
+Il \textbf{MAE} è l'errore medio in valore assoluto e si misura nella stessa unità di $y$: lo capisce chiunque. L'\textbf{RMSE} è la radice dell'errore quadratico medio: stessa unità, ma pesa di più gli errori grandi. L'$R^2$ dice quanto fai meglio di chi risponde sempre con la media: 1 è perfetto, 0 vuol dire che il modello non serve a niente. Esempio: prevedi i round-trip time di tre connessioni e sbagli di $2$, $-2$ e $3$ ms. Il MAE è $7/3 = 2.33$ ms, l'RMSE è $2.38$ ms, e con $R^2 = 0.915$ il modello spiega il 91.5\% della variabilità dei tempi.
+
+\subsubsection*{2. La matrice di confusione}
+Le righe dicono la verità, le colonne la previsione. Per un IDS le caselle sono quattro: attacchi presi (TP), attacchi persi (FN), falsi allarmi (FP) e flussi normali lasciati in pace (TN). Per ricordare i nomi: la seconda parola è quello che hai \emph{previsto}, la prima dice se avevi ragione. Nel nostro esempio, su 1000 flussi con 50 attacchi: $TP = 40$, $FN = 10$, $FP = 30$, $TN = 920$. Tutte le metriche che seguono sono rapporti tra queste quattro caselle: cambia solo quali metti sopra e quali sotto la frazione.
+
+\subsubsection*{3. Il tranello dell'accuracy}
+L'accuracy è la frazione di risposte giuste: $(40 + 920)/1000 = 0.96$. Sembra ottimo, finché non provi l'``IDS pigro'' che dice sempre ``normale'': $950/1000 = 0.95$, quasi uguale, senza aver mai visto un attacco. È come un meteorologo nel deserto che dice sempre ``sole'': ha ragione 99 giorni su 100, ma non ti serve a niente proprio il giorno in cui piove. Con classi sbilanciate l'accuracy la decide la classe grande.
+
+\subsubsection*{4. Precision e recall: due domande diverse}
+Pensa a una rete da pesca. La \textbf{recall} chiede: dei pesci che c'erano nel lago, quanti ne hai presi? La \textbf{precision} chiede: di quello che c'è nella rete, quanto è davvero pesce e quanto sono scarpe vecchie? In formule, $p = TP/(TP+FP)$ divide per quello che \emph{hai chiamato} positivo, mentre $r = TP/(TP+FN)$ divide per quello che \emph{era davvero} positivo. Per l'IDS: $r = 40/50 = 0.80$, cioè prendi 8 attacchi su 10; $p = 40/70 = 0.57$, cioè poco più di metà degli allarmi è vera.
+
+La \textbf{F-measure} li riassume con la media armonica, che punisce lo squilibrio: con $p = 1$ e $r = 0.1$ la media normale darebbe $0.55$, la F dà $0.18$. Un modello che non fa mai allarmi ha $r = 0$ e quindi $F = 0$: il tranello dell'accuracy qui non funziona più.
+
+\subsubsection*{5. Più classi: quale media?}
+Con tre classi (web, video, VoIP) hai una precision, una recall e una F per classe. La media \textbf{macro} le tratta tutte allo stesso modo, quella \textbf{pesata} conta di più le classi numerose, la \textbf{micro} coincide con l'accuracy. Esempio: F per classe $0.91$, $0.81$ e $0.82$, quindi macro $= (0.91 + 0.81 + 0.82)/3 = 0.85$, mentre la pesata vale $0.86$ perché web, la classe migliore, ha più flussi. Se ti interessa riconoscere bene il VoIP, che è la classe piccola, guarda la macro.
+
+\subsection{A che soglia faccio lavorare il modello?}
+\paragraph*{L'idea.} Un classificatore non dice davvero ``attacco sì o no'': dà un punteggio, e siamo noi a decidere da quale punteggio in su far suonare l'allarme. Ogni soglia produce una matrice di confusione diversa, e quindi metriche diverse. Le curve ROC e precision-recall fotografano tutte le soglie in un colpo solo.
+
+\subsubsection*{1. La soglia è una manopola}
+È come la sensibilità di un antifurto: troppo alta e suona per ogni gatto che passa, troppo bassa e non sente i ladri. Abbassare la soglia fa scattare più allarmi, quindi la recall sale e la precision scende; alzarla fa il contrario. Esempio: con soglia $0.3$ prendi il 99\% degli attacchi, ma solo il 14\% degli allarmi è vero; con soglia $0.7$ gli allarmi sono veri all'86\%, ma prendi solo il 55\% degli attacchi. Il compromesso migliore secondo la F-measure ($0.72$) sta a $0.63$. La soglia ``giusta'' però la decide il costo degli errori, non la matematica.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/threshold_tradeoff.png}
+    \caption{A sinistra: punteggi dei flussi normali e degli attacchi; le aree colorate sono falsi positivi e falsi negativi con soglia $0.5$. A destra: spostando la soglia, precision e recall vanno in direzioni opposte.}
+\end{figure}
+
+\subsubsection*{2. La curva ROC}
+Per ogni soglia segni un punto: in orizzontale l'$\text{FPR} = FP/(FP+TN)$, cioè quanti flussi normali disturbi, in verticale il $\text{TPR} = TP/(TP+FN)$, cioè quanti attacchi prendi. In $(0,0)$ non suoni mai, in $(1,1)$ suoni sempre, in $(0,1)$ c'è il classificatore perfetto. La diagonale è il tirare a caso, \emph{qualunque} sia il bilanciamento delle classi; sotto la diagonale fai peggio del caso, e invertendo le risposte finiresti sopra.
+
+Costruirla a mano è facile: ordini i campioni per punteggio decrescente e abbassi la soglia uno alla volta. Ogni positivo che incontri ti fa salire di $1/P$, ogni negativo ti sposta a destra di $1/N$. Con 5 attacchi e 5 normali ogni passo vale $0.2$, e nell'esempio del capitolo l'area sotto la scaletta è $0.08 + 0.32 + 0.40 = 0.80$.
+
+\subsubsection*{3. L'AUC e quando non basta}
+L'AUC ha un significato molto concreto: è la probabilità che un attacco preso a caso abbia un punteggio più alto di un flusso normale preso a caso. Nell'esempio, 20 coppie (attacco, normale) su 25 sono ordinate bene: $20/25 = 0.80$. $0.5$ è il caso, $1$ è la perfezione.
+
+Ma l'AUC è una media su tutte le soglie, ed è come il voto medio di uno studente: non ti dice chi è il più bravo proprio nella materia che ti interessa. Nell'esempio M1 contro M2, M2 ha l'AUC più alta ($0.82$ contro $0.80$), ma se puoi permetterti solo l'1\% di falsi allarmi M1 prende il 58\% degli attacchi e M2 appena il 15\%. Quando le curve si incrociano, si guarda la zona di FPR in cui lavorerai davvero.
+
+\subsubsection*{4. Attacchi rari? Guarda la curva PR}
+L'FPR divide per il numero di negativi, che in rete è enorme, e così anche un FPR piccolo nasconde tanti falsi allarmi. Esempio: 10\,000 flussi con il 2\% di attacchi fanno 200 attacchi e 9800 normali. Un FPR del 5\% sembra poco, ma sono 490 falsi allarmi: anche prendendo tutti i 200 attacchi, la precision non supera $200/690 = 0.29$. La curva precision-recall mette in luce proprio questo: nella figura la ROC è identica con il 50\% o con il 2\% di attacchi (AUC $0.92$ contro $0.93$), mentre l'area sotto la curva PR crolla da $0.92$ a $0.35$.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/roc_vs_pr.png}
+    \caption{Lo stesso classificatore con il 50\% e con il 2\% di attacchi: la ROC non cambia, la curva precision-recall sì.}
+\end{figure}
+
+\subsection{Mi servono più dati?}
+\paragraph*{L'idea.} Raccogliere ed etichettare traffico costa. La learning curve ti dice se ne vale la pena: aumenti il numero di dati di training e guardi come si muovono la metrica sul training e quella sul validation. La forma delle due curve ti dice se il problema è il modello o la quantità di dati.
+
+\subsubsection*{1. Due forme da riconoscere}
+\textbf{Le curve si toccano presto, in basso}: il modello è troppo semplice (alto bias). È lo studente che non ha capito la materia: dargli altri cento esercizi uguali non serve, serve un metodo migliore, cioè un modello più ricco o feature migliori. Nell'esempio la regressione logistica si ferma a $0.82$ di accuracy già con 600 flussi, e con 10\,000 resta lì.
+
+\textbf{Le curve restano lontane, ma la distanza si riduce}: il modello impara a memoria (alta varianza). È lo studente che ricorda le soluzioni: esercizi sempre nuovi lo costringono a capire. Nell'esempio l'albero profondo ha accuracy $1.00$ sul training, mentre sul validation sale da $0.73$ con 96 flussi a $0.87$ con 9600: qui più dati aiutano davvero.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_8/learning_curves.png}
+    \caption{A sinistra: le curve si incontrano subito e più dati non servono (alto bias). A destra: il divario si riduce con i dati (alta varianza).}
+\end{figure}
+
+\subsubsection*{2. Una regola sola}
+Le due curve vanno calcolate con la \textbf{stessa metrica}, altrimenti non puoi confrontarle. Può però essere diversa dalla loss usata per addestrare: si allena con la logistic loss e si guarda l'accuracy.
+
+\subsection{Come regolo gli iperparametri?}
+\paragraph*{L'idea.} I \textbf{parametri} (i pesi) li impara l'ERM dai dati. Gli \textbf{iperparametri} sono le manopole che giri tu prima di addestrare: il grado di un polinomio, la profondità di un albero, il $k$ dei vicini. Si scelgono esattamente come si sceglievano i modelli nel capitolo precedente: ogni combinazione di valori è un candidato, si giudica in cross validation, e il test set resta chiuso fino alla fine.
+
+\subsubsection*{1. La validation curve: una manopola alla volta}
+Giri una sola manopola e guardi training e validation. Nell'esempio dell'albero: con profondità 1 entrambe stanno intorno a $0.70$ (underfitting); con profondità 6 la validation tocca il massimo, $0.84$; con profondità 20 il training arriva a $1.00$ ma la validation scende a $0.81$ (overfitting). Non confonderla con la learning curve: lì cambi la quantità di dati, qui cambi la manopola.
+
+\subsubsection*{2. La grid search: tutte le combinazioni}
+Elenchi alcuni valori per ogni iperparametro e li provi tutti insieme. Il costo è il prodotto del numero di valori per il numero di fold: 6 profondità per 5 valori di min\_samples\_leaf fanno 30 combinazioni, che con $K = 5$ diventano 150 addestramenti. Con 4 iperparametri da 10 valori e $K = 5$ si arriva a $10^4 \cdot 5 = 50\,000$ addestramenti: lì conviene la \textbf{random search}, che prova solo un numero fisso di combinazioni prese a caso.
+
+\subsubsection*{3. Il test set chiude la storia}
+La combinazione migliore dell'esempio ottiene $0.848$ in cross validation e $0.837$ sul test set. Un po' meno, ed è normale: chi vince una gara tra 30 candidati è anche un po' fortunato. Per questo il voto finale lo dà il test set, una volta sola.
+
+\subsection{Quando usare cosa}
+\begin{center}
+    \begin{tabular}{l|l}
+        \textbf{Situazione} & \textbf{Cosa guardare} \\ \hline
+        Regressione, errore nelle unità di $y$ & MAE, RMSE \\
+        Regressione, confronto con la media   & $R^2$ \\
+        Classi bilanciate, errori di costo simile & accuracy \\
+        Falsi allarmi costosi                 & precision, FPR \\
+        Perdere un positivo è grave           & recall \\
+        Un solo numero di compromesso         & F-measure \\
+        Confronto su tutte le soglie          & ROC AUC \\
+        Positivi rari                         & curva PR, AP \\
+        Più classi, contano le piccole        & media macro \\
+        Servono altri dati?                   & learning curve \\
+        Effetto di un iperparametro           & validation curve \\
+        Più iperparametri insieme             & grid search, random search \\
+    \end{tabular}
+\end{center}
+
+\subsection{Errori tipici e trappole d'esame}
+\begin{enumerate}
+    \item \textbf{``Accuracy alta = modello buono''.} Con il 5\% di attacchi, dire sempre ``normale'' vale già $0.95$.
+    \item \textbf{Confondere precision e recall.} Guarda il denominatore: la precision divide per quello che hai \emph{predetto} positivo, la recall per quello che \emph{è} positivo.
+    \item \textbf{``La diagonale della ROC vale solo con classi bilanciate''.} Falso: TPR e FPR si calcolano ciascuno dentro una sola classe.
+    \item \textbf{``AUC più alta = modello sempre migliore''.} Non se le curve si incrociano e lavori in una zona precisa di FPR.
+    \item \textbf{ROC bellissima con positivi rari.} Non garantisce pochi falsi allarmi: controlla la curva precision-recall.
+    \item \textbf{Usare la media aritmetica di $p$ e $r$.} La F-measure è la media armonica $2pr/(p+r)$, che punisce lo squilibrio tra le due.
+    \item \textbf{Learning curve con due metriche diverse.} Training e validation si misurano con la stessa metrica.
+    \item \textbf{Scambiare learning curve e validation curve.} Sull'asse $x$ la prima ha i dati, la seconda l'iperparametro.
+    \item \textbf{Scegliere gli iperparametri guardando il test set.} Il test error diventa ottimista.
+    \item \textbf{Dimenticare il costo della grid search}: (prodotto del numero di valori) $\times K$ addestramenti.
+\end{enumerate}
+
+\subsection{Da sapere per l'esame}
+\begin{center}
+    \begin{tabular}{l|l}
+        \textbf{Concetto} & \textbf{In una riga} \\ \hline
+        Loss e metrica & la loss si minimizza, la metrica serve a decidere \\ \hline
+        MSE, RMSE, MAE & errore quadratico medio, sua radice, errore assoluto \\ \hline
+        $R^2$ & $1 - \sum(y - y')^2/\sum(y - \bar{y})^2$: confronto con la media \\ \hline
+        Matrice di confusione & righe = verità, colonne = previsione \\ \hline
+        Accuracy & $(TP+TN)/m$; ingannevole con classi sbilanciate \\ \hline
+        Precision & $TP/(TP+FP)$: quanti allarmi sono veri \\ \hline
+        Recall = TPR & $TP/(TP+FN)$: quanti positivi prendo \\ \hline
+        F-measure & $2pr/(p+r) = 2TP/(2TP+FP+FN)$ \\ \hline
+        Medie & macro: semplice; pesata: per supporto; micro: accuracy \\ \hline
+        FPR & $FP/(FP+TN)$: quanti negativi disturbo \\ \hline
+        ROC & TPR vs FPR al variare della soglia; diagonale = caso \\ \hline
+        AUC & $P$(score di un positivo $>$ score di un negativo) \\ \hline
+        Curva PR & precision vs recall, per positivi rari \\ \hline
+        Learning curve & metrica vs $m_t$: curve unite = bias, gap = varianza \\ \hline
+        Validation curve & metrica vs un iperparametro \\ \hline
+        Grid search & tutte le combinazioni; costo $= V_1 \cdot V_2 \cdots K$ \\
+    \end{tabular}
+\end{center}

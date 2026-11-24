@@ -69,6 +69,18 @@
 
 \usepackage{amsmath}
 
+\usepackage[english]{babel}
+
+\usepackage{tabularx}
+\usepackage[most]{tcolorbox}
+
+% box usati negli appunti del progetto
+\newtcolorbox{attenzione}{colback=red!5,colframe=red!60!black,
+  title=Attenzione,fonttitle=\bfseries,breakable}
+\newtcolorbox{strategia}{colback=blue!4,colframe=blue!50!black,
+  title=Strategia operativa,fonttitle=\bfseries,breakable}
+\newtcolorbox{domande}{colback=green!4,colframe=green!40!black,
+  title=Domande a cui il report deve rispondere,fonttitle=\bfseries,breakable}
 
 \usepackage{booktabs}  % Per linee più eleganti (\toprule, \midrule)
 \usepackage{array}     % Per una gestione avanzata delle colonne
@@ -157,9 +169,9 @@
 %\include{contents/Dimensionality_Reduction}
 %\include{contents/The_3_components_of_ML}
 %\include{contents/Empirical_Risk}
-\include{contents/Model_Selection_and_Validation}
+%\include{contents/Model_Selection_and_Validation}
 \include{contents/ML_Metrics_and_HyperParameter_Tuning}
-
+%\include{contents/project}
 
 \end{document}
 % -----------------------------------------------------------------
