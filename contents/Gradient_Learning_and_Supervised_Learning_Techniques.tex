@@ -1,26 +1,73 @@
 \chapter{Gradient Learning and Supervised Learning Techniques}
 
-In the previous chapters ERM became an optimization problem: find the parameters that make the empirical risk as small as possible. This chapter first explains how this problem is solved in practice, with \textbf{gradient-based methods}, and how classification is extended to \textbf{more than two classes}. It then reviews the main \textbf{supervised learning techniques}, each described by the three design choices of ERM: data, model and loss.
+In the previous chapters, training a model became a search. A model has some numbers we can tune, its \textbf{weights}. For every choice of the weights we can measure how wrong the model is, on average, on the training set: this average error is the \textbf{empirical risk}. Training the model (ERM) means finding the weights that make this average error as small as possible.
 
-When the hypothesis $h^{(\mathbf{w})}$ is described by a parameter vector $\mathbf{w} \in \mathbb{R}^n$, ERM is the problem
-\[
-\min_{\mathbf{w} \in \mathbb{R}^n} f(\mathbf{w}) := \frac{1}{m}\sum_{i=1}^{m} \underbrace{L\big((\mathbf{x}^{(i)}, y^{(i)}), h^{(\mathbf{w})}\big)}_{f_i(\mathbf{w})} .
-\]
-Here $f_i(\mathbf{w})$ is the loss of the hypothesis on the $i$-th training point and $f(\mathbf{w})$, the empirical risk, is the average of the $m$ single losses. If each single loss $f_i(\mathbf{w})$ is differentiable, $f(\mathbf{w})$ is also differentiable, and we can use its derivatives to find the minimum. For linear regression the minimum can even be computed with a formula, but for most models no formula exists and an iterative method is needed.
+This chapter answers two questions:
+\begin{itemize}
+    \item \textbf{How is this search done in practice?} With \textbf{gradient-based methods}, which improve the weights a little at a time. We also see how classification works with \textbf{more than two classes}.
+    \item \textbf{Which supervised models are used most?} Each one is described with the three design choices of ERM: data, model and loss.
+\end{itemize}
 
 \section{Gradient Based Methods}
-Gradient Based Methods are iterative: they construct a sequence of parameter vectors $\mathbf{w}^{(0)} \rightarrow \mathbf{w}^{(1)} \rightarrow \dots$ that hopefully converges to the minimum of $f(\mathbf{w})$. The intuition is that of a hiker in the fog who wants to reach the bottom of a valley: she cannot see the valley, but she can feel the slope of the ground under her feet, so she takes a step downhill, then another one.
+
+\subsection{The Problem: Finding the Bottom of a Valley}
+Let us start from a tiny example. We have two training points, $(x = 1, y = 2)$ and $(x = 2, y = 4)$, and a very simple model with a single weight $w$: it predicts $y$ as $w$ times $x$. Each value of $w$ draws a different line, and each line makes a different average error on the two points:
+\begin{itemize}
+    \item with $w = 0$ the line is flat and misses both points: the error is $10$;
+    \item with $w = 1$ the line is closer: the error is $2.5$;
+    \item with $w = 2$ the line passes through both points: the error is $0$.
+\end{itemize}
+
+If we compute the error for \emph{every} possible value of $w$, we get a curve: the \textbf{error landscape}. The data never change; the only thing we move is the weight. Training the model means walking to the lowest point of this curve.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/risk_landscape.png}
+    \caption{Left: three choices of the weight $w$ give three lines. Right: the average error of each choice; the best weight ($w = 2$) is at the bottom of the curve.}
+\end{figure}
+
+With one weight the landscape is a curve; with two weights it is a surface, like a valley in the mountains; with more weights we can no longer draw it, but the idea is the same: hills where the model is bad, valleys where it is good.
+
+For linear regression the bottom of the valley can be found directly with a formula. For almost every other model (logistic regression, neural networks, \dots) no such formula exists. We must start somewhere and improve the weights step by step. Gradient-based methods do exactly this: they build a sequence of better and better weights that, hopefully, ends at the bottom.
+
+\paragraph{Why the loss must be ``smooth''.} To decide where to go, these methods need to know which way the ground slopes, and the slope is given by the derivative. This is why the loss must be \textbf{differentiable}: smooth, without jumps or corners. The 0/1 loss, which simply counts the errors, is flat almost everywhere and jumps from one value to the next, so its slope gives no direction (see the Empirical Risk chapter).
+
+\subsection{The Slope and the Gradient}
+Think of a hiker in the fog who wants to reach the bottom of a valley. She cannot see the valley, but she can feel the slope of the ground under her feet. So she takes a step downhill, then another one, until the ground becomes flat.
+
+\paragraph{With one weight,} the slope is simply the derivative of the error with respect to the weight. Its \textbf{sign} tells us where to go:
+\begin{itemize}
+    \item \textbf{slope negative}: the error goes down if $w$ increases, so we move to the right;
+    \item \textbf{slope positive}: the error goes down if $w$ decreases, so we move to the left;
+    \item \textbf{slope zero}: the ground is flat, so we are at the bottom and we stop.
+\end{itemize}
+Its \textbf{size} tells us how steep the ground is: a large slope means a steep hill, a slope close to zero means we are almost at the bottom.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/slope_sign.png}
+    \caption{The dashed line is the tangent: it shows the slope at the current point (in orange). The green arrow shows where the error goes down.}
+\end{figure}
+
+\paragraph{The tangent.} The dashed lines in the figure are the \textbf{tangent lines}: straight lines that touch the curve at the current point and follow its slope. Close to that point, the curve and its tangent are almost the same thing, so the tangent tells us correctly in which direction the error decreases. Far from the point the tangent is wrong: this is why the steps must be small.
+
+\paragraph{With many weights,} we have one slope for each weight. Each one answers the question: ``if I change \emph{only this weight} a little, how much does the error change?'' The list of all these slopes is the \textbf{gradient}, written $\nabla f$. It works like an arrow:
+\begin{itemize}
+    \item it points in the direction in which the error \textbf{grows the fastest} (uphill);
+    \item its length says \textbf{how steep} the landscape is.
+\end{itemize}
 
 \subsection{Gradient Descent}
-The slope is given by the \textbf{gradient} $\nabla f(\mathbf{w})$, the vector of the partial derivatives $\partial f/\partial w_1, \dots, \partial f/\partial w_n$. It points in the direction in which $f$ grows fastest, and its length says how steep $f$ is. The gradient allows to locally approximate $f(\mathbf{w})$ with a linear function, the tangent line (or tangent plane) at the point we are considering:\footnote{Correction: the previous version defined the gradient as ``the tangent line to the point we are locally considering''. The gradient is the vector of partial derivatives; the tangent line (or plane) is the linear approximation built with it.}
+The gradient points uphill, and we want to go down. So we take a step in the \textbf{opposite direction} of the gradient. This is the only formula of the section:
 \[
-f(\mathbf{w}) \approx f(\mathbf{w}^{(r)}) + (\mathbf{w} - \mathbf{w}^{(r)})^{T}\, \nabla f(\mathbf{w}^{(r)}) \qquad \text{for } \mathbf{w} \text{ sufficiently close to } \mathbf{w}^{(r)} .
+\underbrace{\mathbf{w}^{(r+1)}}_{\text{new weights}} \;=\; \underbrace{\mathbf{w}^{(r)}}_{\text{current weights}} \;-\; \underbrace{\alpha}_{\text{learning rate}} \times \underbrace{\nabla f(\mathbf{w}^{(r)})}_{\text{gradient}}
 \]
-The first term is the current value of the empirical risk; the second term says how much it changes when we move from $\mathbf{w}^{(r)}$ to $\mathbf{w}$. Since we want to minimize $f(\mathbf{w})$, we should move in a direction such that the second term is negative, and it is most negative when we move \textbf{opposite to the gradient}. Given the current guess $\mathbf{w}^{(r)}$, the next guess is
-\[
-\mathbf{w}^{(r+1)} = \mathbf{w}^{(r)} - \alpha\, \nabla f(\mathbf{w}^{(r)}) \qquad \text{with a sufficiently small step size } \alpha > 0 .
-\]
-This is the \textbf{gradient descent (GD) step}, and $\alpha$ is the \textbf{learning rate}: it sets the width of the step taken to follow the decreasing direction.\footnote{Correction: the previous version defined the gradient descent step as ``the width of the local steps''. The step is the whole update $\mathbf{w}^{(r+1)} = \mathbf{w}^{(r)} - \alpha\nabla f(\mathbf{w}^{(r)})$; its width is controlled by the learning rate $\alpha$ (and by the steepness $\|\nabla f\|$).} Where $f$ is steep the step is long; near the minimum, where $f$ is flat, the steps become short.
+This is the \textbf{gradient descent (GD) step}. Read it as: \emph{new weights = current weights minus learning rate times gradient}.
+\begin{itemize}
+    \item The \textbf{minus sign} turns the arrow around, from uphill to downhill.
+    \item The \textbf{learning rate} $\alpha$ is a small positive number that controls the length of the step.
+    \item The length of the step also depends on the gradient itself. Where the landscape is steep the gradient is large and the step is long; near the bottom the landscape is almost flat, the gradient is almost zero and the steps become short. The method \textbf{slows down by itself} as it approaches the minimum, instead of jumping over it.
+\end{itemize}
 
 \begin{figure}[h]
     \centering
@@ -28,23 +75,57 @@ This is the \textbf{gradient descent (GD) step}, and $\alpha$ is the \textbf{lea
     \caption{Left: one GD step with one parameter; the linear approximation (dashed) tells in which direction $f$ decreases. Right: with two parameters the gradient is perpendicular to the level curves of $f$ and points uphill; GD moves the other way.}
 \end{figure}
 
-For example, take $f(w) = w^2$, whose derivative is $f'(w) = 2w$, start from $w^{(0)} = -4$ and use $\alpha = 0.35$. Then $w^{(1)} = -4 - 0.35 \cdot (-8) = -1.2$, $w^{(2)} = -1.2 - 0.35 \cdot (-2.4) = -0.36$, and so on: each step multiplies $w$ by $1 - 2\alpha = 0.3$, and after a few steps we are at the minimum $w = 0$.
+\paragraph{How to read the figure.} The \textbf{left panel} is the one-weight case: from the current point, the dashed tangent shows that the error decreases in one direction, and GD takes a step that way. The \textbf{right panel} shows two weights, seen from above like a topographic map. Each closed curve (\textbf{level curve}) joins the points where the error has the same value; the minimum is at the centre. The gradient arrow is \textbf{perpendicular} to the level curve and points outwards, uphill: along the curve the error does not change at all, so the fastest change is straight across it. GD moves in the opposite direction, towards the centre.
+
+\paragraph{A worked example.} Take the error $f(w) = w^2$, whose minimum is at $w = 0$. Its slope at any point is $2w$. Start from $w = -4$ with learning rate $\alpha = 0.35$:
+\begin{center}
+    \begin{tabular}{c|c|c|c}
+        \textbf{Step} & \textbf{Current $w$} & \textbf{Slope ($2w$)} & \textbf{New $w$ = $w$ $-$ 0.35 $\times$ slope} \\ \hline
+        0 & $-4$     & $-8$    & $-4 + 2.8 = -1.2$ \\
+        1 & $-1.2$   & $-2.4$  & $-1.2 + 0.84 = -0.36$ \\
+        2 & $-0.36$  & $-0.72$ & $-0.36 + 0.252 = -0.108$ \\
+    \end{tabular}
+\end{center}
+The slope is negative, so $w$ increases at every step, moving towards $0$. The steps get shorter ($2.8$, then $0.84$, then $0.252$) because the slope gets smaller. In this example each step simply multiplies $w$ by $0.3$, so after a few steps we are practically at the minimum.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/chapter_9/gd_example_path.png}
+    \caption{The worked example: gradient descent on $f(w) = w^2$ from $w = -4$ with learning rate $0.35$. The first step is long, the next ones get shorter and shorter.}
+\end{figure}
 
 \begin{center}
 \fbox{\parbox{0.9\textwidth}{
 \textbf{Algorithm: gradient descent}\\
-\textbf{Input:} training set, loss $L$, learning rate $\alpha$, stopping criterion\\
-\textbf{Output:} parameter vector $\mathbf{w}$
+\textbf{Input:} training set, loss, learning rate $\alpha$, a rule to decide when to stop\\
+\textbf{Output:} the trained weights
 \begin{enumerate}
-    \item Initialize $\mathbf{w}^{(0)}$ (e.g. all zeros, or random) and set $r = 0$.
-    \item Compute the gradient $\nabla f(\mathbf{w}^{(r)}) = \frac{1}{m}\sum_{i=1}^{m} \nabla f_i(\mathbf{w}^{(r)})$.
-    \item Update $\mathbf{w}^{(r+1)} = \mathbf{w}^{(r)} - \alpha\,\nabla f(\mathbf{w}^{(r)})$ and set $r \leftarrow r + 1$.
-    \item If the stopping criterion is met return $\mathbf{w}^{(r)}$, otherwise go back to step 2.
+    \item Choose some starting weights (e.g.\ all zeros, or random).
+    \item Compute the gradient at the current weights: which direction is uphill?
+    \item Take a step in the opposite direction: new weights = current weights $-$ $\alpha$ $\times$ gradient.
+    \item If it is time to stop, return the weights; otherwise go back to step 2.
 \end{enumerate}}}
 \end{center}
 
+\paragraph{One detail that matters later.} The empirical risk is the \emph{average} of the losses of all training points. In the same way, its gradient is the \emph{average} of the gradients computed on each training point. So every single GD step must look at \textbf{all} the training points. Keep this in mind: it is the problem that stochastic gradient descent solves (below).
+
 \subsection{Choosing the Learning Rate}
-Choosing the learning rate is crucial. If $\alpha$ is too small, the steps are tiny and GD needs a huge number of iterations; if it is too large, each step jumps over the minimum to the other side of the valley, and GD oscillates or even diverges. In the example $f(w) = w^2$ each step multiplies $w$ by $1 - 2\alpha$, so GD converges only for $0 < \alpha < 1$: after 5 steps from $w^{(0)} = -4$, $\alpha = 0.05$ is still at $f = 5.58$, $\alpha = 0.35$ is practically at the minimum, while with $\alpha = 1.05$ the value of $|w|$ grows by 10\% at each step and $f$ reaches $41.5$.
+The learning rate is the length of the step, and choosing it is crucial:
+\begin{itemize}
+    \item \textbf{too small}: the steps are tiny, and GD needs a huge number of them to reach the bottom;
+    \item \textbf{too large}: each step jumps over the bottom and lands on the other side of the valley, often higher than before. GD oscillates from one side to the other, or even \textbf{diverges}: the error grows instead of decreasing.
+\end{itemize}
+
+Back to $f(w) = w^2$ from $w = -4$, with three learning rates and 5 steps each:
+\begin{center}
+    \begin{tabular}{c|l|c}
+        \textbf{Learning rate} & \textbf{What happens} & \textbf{Error after 5 steps} \\ \hline
+        $0.05$ (too small) & slow progress, still far from the bottom & $5.58$ \\
+        $0.35$ (good)      & reaches the bottom in a few steps        & practically $0$ \\
+        $1.05$ (too large) & jumps from side to side, moving away & $41.5$ \\
+    \end{tabular}
+\end{center}
+For this particular curve, GD reaches the minimum only if the learning rate is between $0$ and $1$.
 
 \begin{figure}[h]
     \centering
@@ -52,9 +133,9 @@ Choosing the learning rate is crucial. If $\alpha$ is too small, the steps are t
     \caption{Five GD steps on $f(w) = w^2$ from $w^{(0)} = -4$ with three learning rates.}
 \end{figure}
 
-In some cases theoretical bounds and optimal values for $\alpha$ can be given; for the squared error loss of linear regression, for instance, they depend only on the feature vectors of the training set. In practice $\alpha$ is often treated as a hyper-parameter: we try a few values (e.g. $0.001$, $0.01$, $0.1$) and keep the one for which the empirical risk decreases fastest without oscillating.
+In some cases theory gives a good value for the learning rate (for the squared error loss of linear regression, for instance, it depends only on the features of the training set). In practice the learning rate is usually treated as a \textbf{hyper-parameter}: we try a few values (e.g.\ $0.001$, $0.01$, $0.1$) and keep the one for which the error decreases fastest without oscillating.
 
-The general rule is that GD needs fewer steps on \textbf{standardized data}, hence it is better to standardize the features at the beginning (see the Data Pre-processing chapter). If one feature is measured in bytes and another in seconds, the empirical risk is a long and narrow valley: $f$ is very steep in one direction and almost flat in the other. The learning rate must be small enough for the steep direction, so the progress along the flat direction is slow, and the path zig-zags from one side of the valley to the other. After standardization the valley is much rounder and the path goes almost straight to the minimum.
+\paragraph{Standardize the features first.} GD needs far fewer steps on \textbf{standardized data} (see the Data Pre-processing chapter). Suppose one feature is measured in bytes (huge numbers) and another in seconds (small numbers). Then the valley becomes long and narrow, like a canyon: very steep across, almost flat along it. The learning rate must be small enough not to bounce against the steep walls, so the progress along the flat bottom is very slow, and the path zig-zags from one wall to the other. After standardization the valley is much rounder and the path goes almost straight to the minimum.
 
 \begin{figure}[h]
     \centering
@@ -62,13 +143,13 @@ The general rule is that GD needs fewer steps on \textbf{standardized data}, hen
     \caption{GD with the best fixed learning rate on the same problem, before and after standardizing the features: 39 steps against 5 to reduce the empirical risk to 0.1\% of its initial value.}
 \end{figure}
 
-\subsection{Stopping Criteria}
-Additionally, there are different strategies to define when to stop the GD steps:
-\begin{itemize}
-    \item \textbf{Fixed number of iterations}. One pass over the whole training set is called an \textbf{epoch}; in plain GD every iteration uses all the training points, so one iteration is one epoch.
-    \item When the difference between the empirical risk at the previous step and at this step is less than a threshold, meaning that the empirical risk is not improving anymore.
-    \item When the validation error stops decreasing (\textbf{early stopping}).\footnote{Correction: the previous version said to stop ``when validation error keep decreasing''. As long as the validation error decreases the model is still improving on new data; we stop when it stops decreasing and starts to grow.}
-\end{itemize}
+\subsection{When to Stop}
+GD does not know by itself when it has arrived. There are three common rules:
+\begin{enumerate}
+    \item \textbf{A fixed number of steps.} We decide in advance how many steps to make. One pass over the whole training set is called an \textbf{epoch}; in plain GD every step uses all the training points, so one step is one epoch.
+    \item \textbf{The error stops improving.} If the training error decreases less than a small threshold from one step to the next, we stop.
+    \item \textbf{Early stopping.} We watch the error on the \textbf{validation set}. As long as it decreases, the model is still improving on new data. When it stops decreasing and starts to grow, we stop.
+\end{enumerate}
 
 \begin{figure}[h]
     \centering
@@ -76,18 +157,27 @@ Additionally, there are different strategies to define when to stop the GD steps
     \caption{GD on a polynomial of degree 15 learnt from 20 measurements of the queueing delay of a link (both axes in log scale).}
 \end{figure}
 
-Early stopping protects against overfitting. In the figure a very flexible model (a polynomial with 16 coefficients) is learnt by GD from only 20 training points. The validation error is minimal at epoch 64 ($0.73$); if we keep going until epoch 200\,000, the training error decreases to $0.12$ but the validation error grows to $30.5$, because the model is learning the noise of the training points. In practice we wait a few epochs before stopping (a ``patience''), because the validation error fluctuates, and we keep the parameters of the best epoch.
+\paragraph{Why early stopping protects against overfitting.} In the figure, a very flexible model (a polynomial with 16 coefficients) is learnt by GD from only 20 training points. The validation error is lowest at epoch 64 ($0.73$). If we keep going until epoch 200\,000, the training error keeps decreasing (down to $0.12$), but the validation error grows to $30.5$: the model is learning by heart the noise of the training points. In practice we wait a few more epochs before stopping (a ``patience''), because the validation error goes up and down a little, and at the end we keep the weights of the best epoch.
 
 \subsection{Stochastic Gradient Descent}
-Computing the gradient $\nabla f(\mathbf{w}) = \frac{1}{m}\sum_{i} \nabla f_i(\mathbf{w})$ requires a pass over all the $m$ training points at every step, and this is challenging for large $m$, e.g. millions of flow records. \textbf{Stochastic Gradient Descent} (SGD) computes an approximation of the gradient instead:
-\begin{enumerate}
-    \item Iteratively replace the sum with a random component: pick a random index $i_r$ and use $\nabla f_{i_r}$ in place of $\nabla f$, i.e. $\mathbf{w}^{(r+1)} = \mathbf{w}^{(r)} - \alpha\,\nabla f_{i_r}(\mathbf{w}^{(r)})$.
-    \item Iteratively replace the sum with a random \textbf{batch} $\mathcal{B} = \{i_1, \dots, i_B\}$ of $B$ indices (\textbf{mini-batch SGD}), and use
-    \[
-    g(\mathbf{w}) = \frac{1}{B}\sum_{i' \in \mathcal{B}} \nabla f_{i'}(\mathbf{w}) .
-    \]
-\end{enumerate}
-In this case the real gradient is approximated by the \textbf{average} of the gradients of the randomly selected subset, the batch.\footnote{Correction: the previous version said that the gradient is approximated by ``the sum'' of the selected subset. It is the average, $\frac{1}{B}\sum_{i' \in \mathcal{B}}\nabla f_{i'}$, which has the same scale as the true gradient; it is like estimating the mean of a population from a random sample.} On average the approximation equals the true gradient, but it is noisy: the path zig-zags and, with a constant learning rate, keeps fluctuating around the minimum. A larger batch, or a learning rate that decreases over time, reduces the noise.
+\paragraph{The problem.} As we saw, every GD step computes the gradient on \emph{all} the training points. With millions of flow records, even a single step is slow.
+
+\paragraph{The idea.} Instead of computing the exact gradient, we \textbf{estimate} it from a small random sample of the training points, like a poll that estimates the opinion of a whole country by asking a few thousand people:
+\begin{itemize}
+    \item \textbf{SGD}: at each step pick \textbf{one} random training point and use its gradient;
+    \item \textbf{mini-batch SGD}: at each step pick a small random group of points (a \textbf{batch}) and use the \textbf{average} of their gradients.
+\end{itemize}
+The update rule is the same as in GD; only the gradient is replaced by its estimate.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/epoch_budget.png}
+    \caption{The same amount of work, one epoch (each of 200 training points used once), split into steps. Each coloured block is one step, and the points inside it are used to estimate the gradient: GD makes one precise step, mini-batch SGD makes 10, SGD makes 200 rough ones.}
+\end{figure}
+
+\paragraph{The price: noise.} On average the estimate points in the right direction, but each single estimate is a little off. The path therefore zig-zags, and with a constant learning rate it never settles exactly: it keeps wandering around the minimum. A larger batch, or a learning rate that decreases over time, reduces this noise.
+
+\paragraph{The advantage: speed.} With the same work as \emph{one} GD step, SGD makes 200 small steps. Many rough steps get much further than one precise step: in the SGD figure, after one epoch the empirical risk is $7.91$ with GD, $0.69$ with mini-batch SGD and $0.42$ with SGD, while the minimum is $0.40$.
 
 \begin{figure}[h]
     \centering
@@ -95,27 +185,56 @@ In this case the real gradient is approximated by the \textbf{average} of the gr
     \caption{Linear regression on 200 points with GD, mini-batch SGD and SGD. Right: empirical risk against the work done, measured in epochs (one epoch = one GD step = 10 mini-batch steps = 200 SGD steps).}
 \end{figure}
 
-The advantage is speed: with the same work as \emph{one} GD step, SGD makes 200 small steps. In the figure, after one epoch the empirical risk is $7.91$ with GD, $0.69$ with mini-batch SGD and $0.42$ with SGD, against a minimum of $0.40$. SGD is also the natural choice for \textbf{online learning}, e.g. a traffic model that is updated with every new batch of flow records instead of being retrained from scratch.
+SGD is also the natural choice for \textbf{online learning}: for example, a traffic model that is updated with every new batch of flow records, instead of being retrained from scratch.
 
 \begin{center}
     \begin{tabular}{l|c|c|l}
-        & \textbf{Points/step} & \textbf{Steps/epoch} & \textbf{Path} \\ \hline
-        GD             & $m$ & $1$   & smooth, costly steps \\
-        Mini-batch SGD & $B$ & $m/B$ & a bit noisy: usual choice \\
-        SGD            & $1$ & $m$   & noisy, very cheap steps \\
+        & \textbf{Points per step} & \textbf{Steps per epoch} & \textbf{Path} \\ \hline
+        GD             & all     & $1$         & smooth, costly steps \\
+        Mini-batch SGD & a batch & points / batch size & a bit noisy: usual choice \\
+        SGD            & $1$     & one per point & noisy, very cheap steps \\
     \end{tabular}
 \end{center}
 
-\section{Multi-class and Multi-label Classification}
-So far classification was binary, $y \in \{-1, +1\}$. There are two different extensions:
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+\textbf{Key ideas of this section}
 \begin{itemize}
-    \item \textbf{multi-class}: one label with more than two possible values, e.g. the application of a flow, $y \in \{\text{web}, \text{video}, \text{VoIP}\}$;
-    \item \textbf{multi-label}: several labels for each data point, e.g. the application of a flow \emph{and} whether it is encrypted.
+    \item Training = finding the lowest point of the error landscape.
+    \item The gradient is the slope: it points uphill, and its length says how steep the landscape is.
+    \item Gradient descent steps the other way: new weights = current weights $-$ learning rate $\times$ gradient. Steps get shorter near the bottom.
+    \item Learning rate too small: slow. Too large: the method jumps over the minimum and can diverge. Standardized features make the valley round and the descent fast.
+    \item Stop after a fixed number of epochs, when the error stops improving, or when the validation error starts to grow (early stopping).
+    \item SGD and mini-batch SGD estimate the gradient on a few random points: noisier steps, but many more of them for the same work.
+\end{itemize}}}
+\end{center}
+
+\section{Multi-class and Multi-label Classification}
+So far classification was \textbf{binary}: two possible answers, such as normal or malicious, $+1$ or $-1$. Real problems often need more, and there are two different ways in which a problem can be ``more than binary''. They are easy to confuse, so let us separate them clearly:
+\begin{itemize}
+    \item \textbf{Multi-class}: each data point has \emph{one} label, but the label can take more than two values. Example: the application of a flow is web, \emph{or} video, \emph{or} VoIP.
+    \item \textbf{Multi-label}: each data point has \emph{several} labels at the same time. Example: the application of a flow \emph{and} whether it is encrypted.
 \end{itemize}
-In order to perform multi-class classification it is possible to use the one-vs-rest trick or, for logistic regression, the softmax; the naive and the combination approaches are used for multi-label classification.\footnote{Correction: the previous version listed the one-vs-rest trick, the naive approach and the ``each combination is a new category'' approach all as multi-class techniques. The last two make sense only when there are several labels per data point, i.e. for multi-label classification.}
+
+\begin{center}
+    \begin{tabular}{l|l|l}
+        & \textbf{Multi-class} & \textbf{Multi-label} \\ \hline
+        Labels per data point & one & several \\
+        Example & web / video / VoIP & application \emph{and} encrypted yes/no \\
+        Techniques & one-vs-rest, softmax & naive approach, combination approach \\
+    \end{tabular}
+\end{center}
 
 \subsection{One-vs-Rest}
-The \textbf{one-vs-rest} trick divides the classification into $n_{\text{labels}}$ binary classification problems, where $n_{\text{labels}}$ is the number of label values: problem 1 has label value 1 against all the remaining classes, and so on. We produce one sub-problem for each label value $c$, where the sub-problem $c$ is: \emph{label $= c$ or not}. Each binary classifier returns a score $h_c(\mathbf{x})$, its confidence that $\mathbf{x}$ belongs to class $c$, and the final prediction is the class with the \textbf{largest score}. For example, if a flow gets the scores $+1.2$ (web vs rest), $-0.5$ (video vs rest) and $-2.0$ (VoIP vs rest), it is classified as web.
+The \textbf{one-vs-rest} trick turns one multi-class problem into several binary problems, one for each class. With three applications we train three binary classifiers:
+\begin{itemize}
+    \item ``is it web, or something else?''
+    \item ``is it video, or something else?''
+    \item ``is it VoIP, or something else?''
+\end{itemize}
+Each classifier gives a \textbf{score}: how confident it is that the flow belongs to \emph{its} class. To classify a new flow we ask all of them, and the class with the \textbf{largest score} wins. For example, if a flow gets the scores $+1.2$ (web), $-0.5$ (video) and $-2.0$ (VoIP), it is classified as web.
+
+The idea works with any binary classifier: logistic regression, SVM, and so on. With $k$ classes we always train $k$ classifiers.
 
 \begin{figure}[h]
     \centering
@@ -124,11 +243,14 @@ The \textbf{one-vs-rest} trick divides the classification into $n_{\text{labels}
 \end{figure}
 
 \subsection{Softmax}
-Lastly, for multi-class problems logistic regression defines the confidence of the prediction thanks to the \textbf{softmax}. The model computes one score $h_c(\mathbf{x}) = \mathbf{w}_c^{T}\mathbf{x}$ for each of the $k$ classes, and the softmax turns the scores into probabilities:
-\[
-p_c(\mathbf{x}) = \frac{\exp\big(h_c(\mathbf{x})\big)}{\sum_{c'=1}^{k}\exp\big(h_{c'}(\mathbf{x})\big)} .
-\]
-Each $p_c(\mathbf{x})$ is between 0 and 1, they sum to 1, and the class with the largest score gets the largest probability. The loss is $L = -\log p_y(\mathbf{x})$, the negative logarithm of the probability given to the \emph{true} class $y$ (\textbf{cross-entropy}). It extends the logistic loss to $k$ classes: for $k = 2$ it is exactly the logistic loss. It is a smooth loss: it is close to 0 when the true class gets a probability close to 1, and it grows without limit when the true class gets a probability close to 0, i.e. when the classifier is confident and wrong.\footnote{Correction: the previous version said that the softmax extends the logistic loss ``not anymore a 0/1 loss for only 1 classes''. The softmax extends the \emph{logistic} loss (not the 0/1 loss) from 2 to $k$ classes; the loss is $-\log$ of the probability of the true class.}
+Logistic regression has a second, more elegant option for multi-class problems: the \textbf{softmax}. The model computes one score for each class, and the softmax turns these scores into \textbf{probabilities}. It works in two moves:
+\begin{enumerate}
+    \item take the exponential of each score: every number becomes positive, and larger scores become much larger;
+    \item divide each result by their total, so that they add up to 1.
+\end{enumerate}
+The result: each probability is between 0 and 1, they sum to 1, and the class with the largest score gets the largest probability.
+
+\paragraph{Example.} A flow gets the scores $2$ (web), $1$ (video) and $-1$ (VoIP). The exponentials are $7.39$, $2.72$ and $0.37$, whose total is $10.48$. Dividing by the total gives the probabilities $0.71$ (web), $0.26$ (video) and $0.035$ (VoIP).
 
 \begin{figure}[h]
     \centering
@@ -136,17 +258,36 @@ Each $p_c(\mathbf{x})$ is between 0 and 1, they sum to 1, and the class with the
     \caption{From scores to probabilities to loss, for a flow with scores $2$, $1$ and $-1$.}
 \end{figure}
 
-For example, the scores $2$, $1$, $-1$ give $\exp(2) = 7.39$, $\exp(1) = 2.72$, $\exp(-1) = 0.37$, whose sum is $10.48$, hence the probabilities $0.71$, $0.26$ and $0.04$. If the flow is really web the loss is $-\log 0.71 = 0.35$; if it is VoIP, the class the model considered least likely, the loss is $-\log 0.035 = 3.35$.
+\paragraph{The loss: cross-entropy.} To train the model we need a loss, and the one used with the softmax is the \textbf{cross-entropy}. It looks only at the probability that the model gave to the \textbf{true} class, and takes minus its logarithm. What matters is its behaviour:
+\begin{itemize}
+    \item if the model gave a high probability to the true class, the loss is close to 0;
+    \item if the model gave a very low probability to the true class, i.e.\ it was \textbf{confident and wrong}, the loss becomes very large.
+\end{itemize}
+In the example, if the flow is really web the loss is $0.35$; if it is really VoIP, the class the model considered least likely, the loss is $3.35$.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/chapter_9/cross_entropy.png}
+    \caption{The cross-entropy loss depends only on the probability given to the true class: small when that probability is high, very large when it is close to 0.}
+\end{figure}
+
+The cross-entropy is the natural extension of the logistic loss (Empirical Risk chapter) from 2 to $k$ classes: with only two classes, it \emph{is} the logistic loss. Like the logistic loss it is smooth, so it can be minimized with gradient descent.
 
 \subsection{Multi-label Classification}
-With several labels per data point there are two approaches:
-\begin{itemize}
-    \item \textbf{Naive approach}: consider each label separately and solve a (binary or multi-class) problem for each label: one classifier for the application, one for encrypted yes/no. It is simple, but it ignores the correlations between the labels.
-    \item \textbf{Combination approach}: each combination of label values defines a new category, and a single multi-class problem is solved. With 3 applications and encrypted yes/no we get $3 \times 2 = 6$ classes. Correlations are captured, but the number of classes is the product of the numbers of label values, so it grows quickly and some combinations have very few examples.
-\end{itemize}
+When each data point has several labels, there are two approaches.
+
+\paragraph{Naive approach.} Treat each label as a separate problem and train one classifier per label: one for the application, one for encrypted yes/no. It is simple, but each classifier ignores the other labels, so it cannot use the fact that, for example, some applications are almost always encrypted.
+
+\paragraph{Combination approach.} Every combination of label values becomes a new class, and one single multi-class classifier is trained. With 3 applications and encrypted yes/no we get $3 \times 2 = 6$ classes. The links between the labels are captured, but the number of classes is the product of the numbers of values, so it grows very quickly, and some combinations may have very few training examples.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/combination_approach.png}
+    \caption{Two labels per flow. Left: the naive approach trains one classifier per label. Right: the combination approach trains one classifier with one class per combination.}
+\end{figure}
 
 \section{Supervised Learning Techniques}
-It is useful to differentiate the Supervised Learning Techniques for regression and classification tasks. Several of them can be used for both.
+We now review the most used supervised techniques. Some solve regression tasks (predicting a number), some classification tasks (predicting a class), and several can do both.
 
 \begin{center}
     \begin{tabular}{l|l}
@@ -159,26 +300,33 @@ It is useful to differentiate the Supervised Learning Techniques for regression 
         & Neural networks and deep learning \\
     \end{tabular}
 \end{center}
-Neural networks are covered in the next chapters. For each of the other techniques we give the three design choices of ERM: data, model and loss.
+Neural networks are covered in the next chapters. Each of the other techniques is described with the same recipe as in ERM, answering three questions:
+\begin{itemize}
+    \item \textbf{DATA}: what kind of features and labels does it accept?
+    \item \textbf{MODEL}: what shape can the prediction take (a straight line, a staircase, \dots)?
+    \item \textbf{LOSS}: what does it try to minimize?
+\end{itemize}
 
 \subsection{LASSO Regressor}
-The \textbf{LASSO} regressor, which stands for least absolute shrinkage and selection operator, is a supervised regressor with the following characteristics:
-\begin{itemize}
-    \item \textbf{DATA}: numeric features and label;
-    \item \textbf{MODEL}: space of linear maps;
-    \item \textbf{LOSS}: regularized squared loss,
-\end{itemize}
-\[
-L\big((\mathbf{x}, y), h^{(\mathbf{w})}\big) = \big(y - \mathbf{w}^{T}\mathbf{x}\big)^2 + \lambda \|\mathbf{w}\|_1, \qquad \|\mathbf{w}\|_1 = |w_1| + |w_2| + \dots + |w_n| .
-\]
-It is useful to remember that ordinary linear regression requires the training set to be larger than the number of features ($m > n$) to avoid \textbf{overfitting}: with $m \leq n$ there are infinitely many weight vectors that fit the training points exactly. However, often $m < n$, e.g. hundreds of traffic statistics measured on a few dozen labelled incidents. LASSO, thanks to the penalty, can be used also when $m < n$.\footnote{Correction: the previous version said that LASSO, since it solves a linear regression problem, requires $m > n$. It is plain linear regression that needs $m > n$; the penalty of LASSO is what allows it to work also when $m < n$.}
+\textbf{In one sentence:} LASSO is linear regression with a ``fine'' for every feature it uses, so useless features end up with a weight of exactly zero.
 
-The \textbf{regularization technique} adds to the loss a penalty, weighted by $\lambda \geq 0$, for using too many features. In a nutshell, the loss function has 2 components:
 \begin{itemize}
-    \item \textbf{first component}: the squared loss, which asks the model to fit the training data;
-    \item \textbf{penalty} $\lambda\|\mathbf{w}\|_1$: a larger penalty favours simpler models using fewer features, by setting more coefficients exactly to 0. It works as \textbf{feature selection}.
+    \item \textbf{DATA}: numeric features and numeric label (it is a \textbf{regression} method);
+    \item \textbf{MODEL}: a straight line, or a plane in more dimensions (linear maps);
+    \item \textbf{LOSS}: squared error $+$ a penalty proportional to the sum of the absolute values of the weights.
 \end{itemize}
-By increasing $\lambda$, the weight vector $\mathbf{w}$ has more and more zero coefficients. Why exactly zero? The weights that minimize the loss sit where the level curves of the squared error first touch a ``ball'' $\|\mathbf{w}\|_1 \leq t$. For $\|\cdot\|_1$ the ball is a diamond with corners on the axes, and the contact typically happens at a corner, where some weights are exactly 0. \textbf{Ridge regression} uses the penalty $\lambda\|\mathbf{w}\|_2^2$ instead, whose ball is round: it shrinks the weights but almost never makes them zero.
+(LASSO stands for \emph{least absolute shrinkage and selection operator}.)
+
+\paragraph{Two forces pulling in opposite directions.} The loss has two parts:
+\begin{itemize}
+    \item the \textbf{squared error} asks the model to fit the training data as well as possible;
+    \item the \textbf{penalty} punishes large weights. Its strength is set by a number $\lambda$ (``lambda''): with $\lambda = 0$ there is no penalty, and the larger $\lambda$, the stronger the fine.
+\end{itemize}
+As $\lambda$ grows, more and more weights become \textbf{exactly zero}, and the corresponding features are no longer used: LASSO performs \textbf{feature selection} by itself.
+
+\paragraph{Why it helps.} Ordinary linear regression needs more training points than features. With fewer points than features there are infinitely many sets of weights that fit the training points perfectly, and the model overfits. This happens often in networking, e.g.\ hundreds of traffic statistics measured on a few dozen labelled incidents. Thanks to its penalty, LASSO works also in this case.
+
+\paragraph{Why exactly zero?} The answer is in the shape of the penalty, shown in the right part of the figure. The penalty of LASSO forces the weights to stay inside a \textbf{diamond}, whose corners lie on the axes. The best weights are found where the error, growing outwards from its own minimum, first touches the diamond, and this typically happens at a \textbf{corner}, where some weights are exactly 0. \textbf{Ridge regression} uses a different penalty (the sum of the \emph{squared} weights) whose shape is a \textbf{circle}: it has no corners, so it shrinks the weights but almost never sets them to zero.
 
 \begin{figure}[h]
     \centering
@@ -186,26 +334,41 @@ By increasing $\lambda$, the weight vector $\mathbf{w}$ has more and more zero c
     \caption{Left: LASSO weights for predicting the throughput of a TCP connection from 10 standardized features measured on 40 connections, as $\lambda$ grows. Right: why the L1 penalty produces exact zeros while the L2 penalty does not.}
 \end{figure}
 
-In the figure only 3 of the 10 features really influence the throughput (RTT, loss rate and link utilization). As $\lambda$ grows all weights shrink, and the irrelevant ones reach 0 first. The $\lambda$ chosen by cross validation keeps 6 non-zero weights: the 3 relevant features with large weights, and 3 irrelevant ones with small weights (below $0.25$ in absolute value), while hop count, packet size, hour of day and window size get exactly 0. A larger $\lambda$ keeps only the relevant features; a very large one sets all weights to 0, and the model predicts the mean throughput. $\lambda$ is a hyper-parameter, chosen with a validation curve or cross validation; the features must be standardized, otherwise the penalty would depend on their units.
+\paragraph{Reading the figure.} Only 3 of the 10 features really influence the throughput: RTT, loss rate and link utilization. As $\lambda$ grows (left to right), all weights shrink, and the irrelevant ones reach 0 first. With the $\lambda$ chosen by cross validation:
+\begin{itemize}
+    \item 4 features get exactly 0: hop count, packet size, hour of day and window size;
+    \item the 3 relevant features keep large weights;
+    \item 3 irrelevant features keep small weights (below $0.25$).
+\end{itemize}
+A larger $\lambda$ keeps only the relevant features; a very large one sets all weights to 0, and the model always predicts the mean throughput.
+
+\paragraph{In practice.} $\lambda$ is a hyper-parameter, chosen with a validation curve or cross validation. The features must be \textbf{standardized}, otherwise the penalty would depend on their units of measurement.
 
 \subsection{Support Vector Machines}
-The \textbf{SVM}, or Support Vector Machine, is a supervised classifier used to perform linear classification:
-\begin{itemize}
-    \item \textbf{DATA}: numeric features, binary label values $y \in \{-1, +1\}$;
-    \item \textbf{MODEL}: space of linear maps;
-    \item \textbf{LOSS}: regularized hinge loss.
-\end{itemize}
-SVM and logistic regression share the same data and model and differ only in the loss: replacing the hinge loss with the logistic loss turns the SVM into logistic regression.\footnote{Clarification: the previous version said that the SVM ``can be also used for logistic regression tasks, by changing the loss function''. With a different loss it is no longer an SVM: the point is that the two methods are two instances of ERM that differ only in the loss.}
+\textbf{In one sentence:} among all the lines that separate two classes, the SVM picks the one that stays as far as possible from both: the widest possible ``road'' between the two groups.
 
-SVM looks for a hyperplane, the decision boundary, that separates the data. It needs a \textbf{regularized} hinge loss because, for a linearly separable dataset, there might be infinitely many linear maps with 0 average hinge loss: any separating line, with large enough weights, classifies every point correctly with confidence $y\,h(\mathbf{x}) \geq 1$. The regularized hinge loss used in SVM is
-\[
-\frac{1}{m}\sum_{i=1}^{m} \max\big(0,\ 1 - y^{(i)} h^{(\mathbf{w})}(\mathbf{x}^{(i)})\big) + \lambda\|\mathbf{w}\|_2^2 .
-\]
 \begin{itemize}
-    \item \textbf{First member}: the average hinge loss, zero for the points classified correctly with enough confidence.
-    \item \textbf{Second member}: the regularization, weighted by $\lambda$, which penalizes large weights in order to \textbf{maximize the margin}, i.e. the distance between the decision boundary and the closest training points. The width of the margin is $2/\|\mathbf{w}\|_2$, so smaller weights mean a wider margin.
+    \item \textbf{DATA}: numeric features, binary label ($+1$ or $-1$);
+    \item \textbf{MODEL}: a straight line, or a plane in more dimensions (linear maps);
+    \item \textbf{LOSS}: hinge loss $+$ a penalty on large weights.
 \end{itemize}
-The end goal is a decision boundary that separates the data and maximizes the margin: among all the separating lines, the SVM picks the safest one, the farthest from both classes, which increases the confidence of the classification. A new point slightly different from the training points is still on the right side.
+
+\paragraph{SVM and logistic regression are cousins.} They use the same data and the same model; they differ \emph{only} in the loss. Hinge loss gives the SVM, logistic loss gives logistic regression: two instances of ERM with a different third ingredient.
+
+\paragraph{The hinge loss.} It judges each training point in one of three ways:
+\begin{itemize}
+    \item \textbf{wrong side of the line}: large loss, and the further away, the larger;
+    \item \textbf{right side, but too close to the line}: a smaller loss, as a warning;
+    \item \textbf{right side and far enough}: loss exactly 0, the point is ``safe''.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/chapter_9/hinge_loss.png}
+    \caption{The hinge loss of one training point, depending on how confidently it is classified correctly. The logistic loss (dashed) behaves similarly but is never exactly 0.}
+\end{figure}
+
+\paragraph{Why a penalty is needed.} If the classes can be separated by a line, there are infinitely many lines that separate them, and with large enough weights each of them puts every point in the ``safe'' zone, with a hinge loss of 0. Which one should we choose? The penalty on large weights breaks the tie: keeping the weights small is the same as asking for the widest \textbf{margin}, i.e.\ the largest distance between the line and the closest training points (the width of the margin is $2$ divided by the size of the weights). The SVM therefore picks the \textbf{safest} line, the one farthest from both classes. A new point slightly different from the training points will still fall on the right side.
 
 \begin{figure}[h]
     \centering
@@ -213,32 +376,46 @@ The end goal is a decision boundary that separates the data and maximizes the ma
     \caption{Detecting port scans from the number of new connections per second and of distinct destination ports. Left: many lines separate the classes. Centre and right: the SVM boundary (solid) and margin (dashed) for a small and a large $\lambda$.}
 \end{figure}
 
-The parameter $\lambda$ sets the trade-off. With a small $\lambda$ the hinge loss dominates and no point may fall inside the margin (\textbf{hard margin}, width $1.19$ in the figure). With a large $\lambda$ the margin becomes wider ($2.33$) and some points are allowed inside it (\textbf{soft margin}), which makes the SVM more robust to noisy points. The points on or inside the margin are the \textbf{support vectors}: they alone determine the boundary, and moving any other point does not change it. In scikit-learn the trade-off is set by the parameter $C$, which plays the role of $1/\lambda$: a large $C$ means a small $\lambda$. With the so-called kernel trick, SVMs can also learn non-linear boundaries.
+\paragraph{Hard and soft margin.} The parameter $\lambda$ decides how much the penalty counts:
+\begin{itemize}
+    \item \textbf{small $\lambda$}: the hinge loss dominates, no point may fall inside the margin, and the margin is narrow (\textbf{hard margin}: $1.19$ wide in the figure);
+    \item \textbf{large $\lambda$}: the margin becomes wider ($2.33$) and some points are allowed inside it (\textbf{soft margin}), which makes the SVM more robust to noisy points.
+\end{itemize}
+
+\paragraph{Support vectors.} The points on the edge of the margin or inside it are the \textbf{support vectors}. They alone decide where the line goes: moving any other point does not change it.
+
+\paragraph{In practice.} In scikit-learn the trade-off is set by the parameter $C$, which works the \emph{opposite} way: $C$ plays the role of $1/\lambda$, so a large $C$ means a small penalty, a narrow margin and more risk of overfitting. With the so-called \textbf{kernel trick}, SVMs can also learn curved boundaries.
 
 \subsection{Naive Bayes Classifier}
-The \textbf{Naive Bayes} classifier is a supervised classifier that works with the following design choices:
-\begin{itemize}
-    \item \textbf{DATA}: numeric features, binary labels;
-    \item \textbf{MODEL}: space of linear maps;\footnote{Note: the decision boundary of Gaussian Naive Bayes is linear only when each feature has the same variance in the two classes; when the variances depend on the class, as described below, the boundary is a curve (quadratic). This is probably a simplification of the course, so it is kept here; the figure shows both cases.}
-    \item \textbf{LOSS}: 0/1 loss.
-\end{itemize}
-The 0/1 loss counts the errors, which is exactly what we care about, but it is flat almost everywhere and cannot be minimized with gradient methods (see the Empirical Risk chapter). Naive Bayes takes another route. The hypothesis that minimizes the expected 0/1 loss is known, the \textbf{Bayes classifier}: given the features $\mathbf{x}$, classify the sample as the class $y$ with maximum $p(y\,|\,\mathbf{x})$. In the binary case
-\[
-\widehat{h}(\mathbf{x}) =
-\begin{cases}
-1 & \text{if } p(y = 1\,|\,\mathbf{x}) > p(y = -1\,|\,\mathbf{x}) \\
--1 & \text{otherwise.}
-\end{cases}
-\]
-In a nutshell, if, given the features $\mathbf{x}$, the probability of class $1$ is higher than the probability of class $-1$, $\mathbf{x}$ is classified as class $1$. The problem is that we do not have this probability distribution.
+\textbf{In one sentence:} Naive Bayes does not optimize anything: it counts how common each class is, looks at how the features are distributed in each class, and picks the most probable class.
 
-The Naive Bayes classifier estimates it from the training points, using Bayes' theorem $p(y\,|\,\mathbf{x}) = p(\mathbf{x}\,|\,y)\,p(y)/p(\mathbf{x})$:
 \begin{itemize}
-    \item $p(\mathbf{x})$ is the same for all $y$, so it does not affect the comparison and can be ignored;
-    \item $p(y)$, the probability of class $y$, is estimated by the relative frequency of class $y$ in the training set;
-    \item $p(\mathbf{x}\,|\,y)$ is estimated with the \textbf{naive hypothesis}: the features are independent given the class, so $p(\mathbf{x}\,|\,y) = p(x_1\,|\,y) \cdot p(x_2\,|\,y) \cdots p(x_n\,|\,y)$, and each $x_j$ is a one-dimensional Gaussian random variable with mean and variance depending on $y$ (the sample mean and variance of feature $j$ over the training points of class $y$).
+    \item \textbf{DATA}: numeric features, binary label;
+    \item \textbf{MODEL}: a straight line (linear maps), a simplification used in the course: in general the boundary can be curved, as the figure shows;
+    \item \textbf{LOSS}: 0/1 loss, i.e.\ the number of errors.
 \end{itemize}
-Therefore we have two Gaussian distributions for each feature, one for the positive class and one for the negative class. Their product gives two distributions over the whole feature vector, one per class, and the decision boundary separates the regions where $p(\mathbf{x}\,|\,1)\,p(1)$ or $p(\mathbf{x}\,|\,{-1})\,p(-1)$ is larger. Training does not solve an optimization problem: it only computes frequencies, means and variances, which are then plugged into the Bayes classifier.\footnote{Correction: the previous version said that Naive Bayes ``tries to minimize the ERM by computing the single probabilities''. Naive Bayes does not minimize the empirical risk: it estimates a probability model from the training data and then applies the Bayes classifier, which would minimize the expected 0/1 loss if the estimated probabilities were exact.}
+
+\paragraph{The ideal classifier, and the problem.} The 0/1 loss counts the errors, which is exactly what we care about, but it cannot be minimized with gradient descent (it is flat almost everywhere). Naive Bayes takes another route. The best possible classifier for the 0/1 loss is known, the \textbf{Bayes classifier}: given the features of a flow, choose the class that is \textbf{most probable} for those features. The problem is that we do not know these probabilities. Naive Bayes estimates them from the training set.
+
+\paragraph{How it estimates them.} For each class it computes a \textbf{score} by multiplying:
+\begin{enumerate}
+    \item \textbf{how common the class is}: the fraction of training points of that class (e.g.\ 70\% normal, 30\% malicious);
+    \item \textbf{how well each feature fits the class}: for each feature and each class, Naive Bayes computes the mean and the variance of the feature over the training points of that class, i.e.\ it draws one bell curve (a Gaussian) per feature and per class. The height of the bell at the value of the new flow says how typical that value is for the class.
+\end{enumerate}
+Multiplying the features one by one is only allowed if the features are \textbf{independent} of each other within each class. This is the \textbf{naive hypothesis} that gives the method its name. The class with the largest score wins.
+
+\paragraph{Example.} For a new flow, the bell curves give $0.05$ and $0.30$ for the normal class, and $0.40$ and $0.20$ for the malicious class. The class frequencies are $0.7$ and $0.3$. Then:
+\begin{itemize}
+    \item normal: $0.7 \times 0.05 \times 0.30 = 0.0105$;
+    \item malicious: $0.3 \times 0.40 \times 0.20 = 0.024$.
+\end{itemize}
+The flow is classified as malicious, although normal flows are more frequent: its features look much more like those of the malicious flows.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/chapter_9/naive_bayes_example.png}
+    \caption{The worked example: each class gets a score by multiplying how common it is by how well each feature fits it; the largest score wins.}
+\end{figure}
 
 \begin{figure}[h]
     \centering
@@ -246,24 +423,27 @@ Therefore we have two Gaussian distributions for each feature, one for the posit
     \caption{Naive Bayes step by step on 100 flows (70 normal, 30 malicious): class frequencies, one Gaussian per feature and per class, and their product with the resulting decision boundary.}
 \end{figure}
 
-For example, suppose that for a new flow the Gaussians give $p(x_1\,|\,\text{normal}) = 0.05$, $p(x_2\,|\,\text{normal}) = 0.30$, $p(x_1\,|\,\text{malicious}) = 0.40$ and $p(x_2\,|\,\text{malicious}) = 0.20$, with class frequencies $0.7$ and $0.3$. Then normal scores $0.7 \cdot 0.05 \cdot 0.30 = 0.0105$ and malicious scores $0.3 \cdot 0.40 \cdot 0.20 = 0.024$: the flow is classified as malicious, although normal flows are more frequent. The independence hypothesis is rarely true (packet size and throughput are correlated), but Naive Bayes works well in practice: it has only two parameters per feature and per class, it is extremely fast to train, and it needs little data.
+\paragraph{Training is just counting.} Naive Bayes solves no optimization problem: training means computing frequencies, means and variances, then plugging them into the Bayes classifier. It does not minimize the empirical risk; it would be the best possible classifier if its estimated probabilities were exact.
+
+\paragraph{Why ``naive'', and why it still works.} The independence hypothesis is rarely true (packet size and throughput, for example, are clearly related). Yet Naive Bayes works well in practice: it has only two numbers per feature and per class, it is extremely fast to train, and it needs little data.
 
 \subsection{Decision Tree}
-The \textbf{Decision Tree} has the following characteristics:
+\textbf{In one sentence:} a decision tree is a sequence of yes/no questions, each on one feature, like the game ``Guess Who?''.
+
 \begin{itemize}
-    \item it is a \textbf{regressor and a classifier};
-    \item \textbf{DATA}: numeric and categorical features, arbitrary label;
-    \item \textbf{MODEL}: piecewise constant maps, represented by a flowchart, the decision tree;
-    \item \textbf{LOSS}: different options for the loss function (e.g. Gini impurity or entropy for classification, squared error for regression), which are optimized locally and greedily, not globally.
+    \item it is both a \textbf{classifier} and a \textbf{regressor};
+    \item \textbf{DATA}: numeric and categorical features, any kind of label;
+    \item \textbf{MODEL}: a constant answer in each region of the feature space (piecewise constant maps), represented by a flowchart: the tree;
+    \item \textbf{LOSS}: how ``mixed'' the groups are (e.g.\ Gini impurity or entropy for classification, squared error for regression), minimized one question at a time.
 \end{itemize}
 
-\paragraph{Decision Tree as Classifier.} Decision Trees are models that use a tree-like structure containing only conditional control statements. A decision tree can be represented as a flowchart in which:
+\paragraph{How to read a tree.}
 \begin{itemize}
-    \item \textbf{internal nodes} are condition tests on an attribute;
-    \item each \textbf{branch} represents an outcome of the condition test;
-    \item each \textbf{leaf node} holds a class label.
+    \item each \textbf{internal node} asks a question about one feature (e.g.\ ``is the mean packet size below a certain threshold?'');
+    \item each \textbf{branch} is one answer (yes or no);
+    \item each \textbf{leaf} gives the final answer: a class.
 \end{itemize}
-To classify a record we start from the root and follow the branches given by its features until we reach a leaf.
+To classify a flow, start from the root and follow the answers until a leaf.
 
 \begin{figure}[h]
     \centering
@@ -271,23 +451,34 @@ To classify a record we start from the root and follow the branches given by its
     \caption{Left: a decision tree that recognizes video flows, learnt from 300 flows. Right: the regions of the feature space defined by the same tree.}
 \end{figure}
 
-In the figure, a flow with mean packet size 1200 B and duration 120 s answers ``no'' to the first test and ``no'' to the second, so it is classified as video; with the same packet size and a duration of 30 s it would be classified as other. Since each test compares \emph{one} feature with a threshold, the tree splits the feature space into rectangles with sides parallel to the axes, each with its own label. The tree is learnt greedily, from the root to the leaves:
+In the figure, a flow with mean packet size 1200 B and duration 120 s answers ``no'' to the first question and ``no'' to the second, so it is classified as video; with the same packet size and a duration of 30 s it would be classified as other. Since each question compares \emph{one} feature with a threshold, the tree cuts the feature space into \textbf{rectangles} with sides parallel to the axes, each with its own class.
+
+\paragraph{How a tree is built.} At each node the algorithm tries every feature and every threshold, and keeps the question that splits the points into the \textbf{purest} groups, i.e.\ groups that contain, as much as possible, a single class.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/greedy_split.png}
+    \caption{Choosing the question for a node. Split A leaves both groups mixed; split B creates two pure groups, so it is chosen.}
+\end{figure}
 
 \begin{center}
 \fbox{\parbox{0.9\textwidth}{
 \textbf{Algorithm: growing a decision tree (greedy)}\\
-\textbf{Input:} training set, loss (e.g. Gini impurity), stopping rule (e.g. maximum depth)\\
+\textbf{Input:} training set, a measure of how mixed a group is (e.g.\ Gini impurity), a rule to stop (e.g.\ maximum depth)\\
 \textbf{Output:} decision tree
 \begin{enumerate}
     \item Put all the training points in the root.
-    \item For the current node, try every feature and every threshold, and choose the split that makes the two children as pure as possible (smallest loss).
-    \item Repeat step 2 on each child, until the node is pure or the stopping rule is met.
-    \item Each leaf predicts the majority class of its points (the mean label for regression).
+    \item For the current node, try every feature and every threshold, and choose the question that makes the two groups as pure as possible.
+    \item Repeat step 2 on each group, until the group is pure or the stopping rule is met.
+    \item Each leaf predicts the most frequent class of its points (the mean label for regression).
 \end{enumerate}}}
 \end{center}
-Each split is the best one \emph{now}, without looking ahead: finding the globally optimal tree would be computationally infeasible. The Decision Tree allows for non-linear decision boundaries, it is extremely fast at classifying unknown records (a handful of comparisons) and it is easy to interpret for small-sized trees. Its weak point is overfitting: a tree grown without limits ends up with a leaf for almost every training point, and small changes in the data can produce a very different tree. The maximum depth is its main hyper-parameter (see the validation curve in the previous chapter).
 
-The Decision Tree for regression tasks works similarly to the one for classification, but in this case the output of each leaf is a single number, the average label of its training points. The prediction is therefore a staircase, a \textbf{piecewise constant} function.
+The method is \textbf{greedy}: each question is the best one \emph{now}, without looking ahead. Finding the best tree overall would take far too long.
+
+\paragraph{Strengths and weaknesses.} A decision tree can draw non-linear boundaries, classifies new flows extremely fast (a handful of comparisons) and, when small, is easy to read. Its weak point is \textbf{overfitting}: a tree grown without limits ends up with almost one leaf per training point, and a small change in the data can produce a very different tree. The \textbf{maximum depth} is its main hyper-parameter (see the validation curve in the previous chapter).
+
+\paragraph{Regression trees.} A tree for regression works in the same way, but each leaf gives a number: the average label of its training points. The prediction is therefore a \textbf{staircase} (a piecewise constant function).
 
 \begin{figure}[h]
     \centering
@@ -296,23 +487,25 @@ The Decision Tree for regression tasks works similarly to the one for classifica
 \end{figure}
 
 \subsection{Random Forest}
-The \textbf{Random Forest} is an ensemble classifier that consists of many decision trees, and it can also be used as an ensemble regressor. The RF outputs the class according to the results of the different trees, for instance by majority voting (by averaging their outputs for regression).\footnote{Correction: the previous version wrote ``DT outputs the class according to the results of the different trees''; it is the random forest (RF) that combines the trees.}
+\textbf{In one sentence:} a random forest is many different decision trees that vote.
 
-For each of the $K$ trees in the forest, a random subset of $n'$ features and a random subset of $m'$ training samples are selected. By changing the data we obtain different hypotheses. Then, looking at the results of the different hypotheses, the forest performs majority voting to determine the output.\footnote{Note: in the standard random forest (Breiman's algorithm, and RandomForestClassifier in scikit-learn) each tree is trained on a bootstrap sample, i.e. $m' = m$ points drawn \emph{with replacement}, and the random subset of $n'$ features is drawn again \emph{at each split}, not once per tree. The description above may follow the convention of the course; check the slides.}
+A random forest can be used both as a classifier (the class with the most votes wins) and as a regressor (the trees' outputs are averaged).
+
+\paragraph{How the trees are made different.} Each of the $K$ trees is trained on a \textbf{random subset} of the training points and a \textbf{random subset} of the features. Different data give different trees, and therefore different opinions.
 
 \begin{center}
 \fbox{\parbox{0.9\textwidth}{
 \textbf{Algorithm: random forest}\\
-\textbf{Input:} training set with $m$ points and $n$ features, number of trees $K$, sizes $m'$ and $n'$\\
-\textbf{Output:} prediction for a new record $\mathbf{x}$
+\textbf{Input:} training set, number of trees $K$, how many points and features each tree sees\\
+\textbf{Output:} prediction for a new flow
 \begin{enumerate}
-    \item For $k = 1, \dots, K$: draw $m'$ training points and $n'$ features at random, and grow tree $k$ on them.
-    \item To predict $\mathbf{x}$, compute the output of every tree.
-    \item Return the majority class (classification) or the average output (regression).
+    \item For each of the $K$ trees: pick training points and features at random, and grow the tree on them.
+    \item To predict a new flow, ask every tree.
+    \item Return the class with the most votes (classification) or the average output (regression).
 \end{enumerate}}}
 \end{center}
 
-A single deep tree has low bias but high variance: it changes a lot with the training data. Trees trained on different data make different errors, and the vote averages them out, like the ``wisdom of the crowd''. If each of 25 trees were right 70\% of the time and their errors were independent, the majority would be right about 98\% of the time. In reality the trees make correlated errors, and the random subsets of data and features are there precisely to make them as different as possible. The number of trees $K$ can be selected via the validation curve or set to a default number (100 in scikit-learn); the same goes for the number of features $n'$ (by default $\sqrt{n}$ for classification). More trees do not cause overfitting, they only cost more computation. The price is interpretability: a hundred trees cannot be read like a single small one.
+\paragraph{Note.} In the standard random forest (and in scikit-learn's \texttt{RandomForestClassifier}), each tree is trained on a sample of the training points drawn \emph{with replacement} (a bootstrap sample, with as many points as the training set), and the random subset of features is drawn again \emph{at every question}, not once per tree. Check on the slides which version the course uses.
 
 \begin{figure}[h]
     \centering
@@ -320,29 +513,41 @@ A single deep tree has low bias but high variance: it changes a lot with the tra
     \caption{Random forest: each tree is trained on a random subset of flows and features, and the trees vote.}
 \end{figure}
 
+\paragraph{Why voting works: the wisdom of the crowd.} A single deep tree changes a lot when the training data change: its mistakes are unstable. Trees trained on different data make mistakes on different flows, and the vote cancels them out. If each of 25 trees were right 70\% of the time and their mistakes were independent, the majority would be right about 98\% of the time. In reality the trees' mistakes are partly related, and the random subsets of data and features are there precisely to make the trees as different as possible.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/chapter_9/forest_vote.png}
+    \caption{How often the majority is right, if each tree is right 70\% of the time and the trees make independent mistakes.}
+\end{figure}
+
+\paragraph{In practice.}
+\begin{itemize}
+    \item The number of trees $K$ can be chosen with a validation curve or left at its default (100 in scikit-learn). The same holds for the number of features each tree sees (by default, the square root of the number of features, for classification).
+    \item \textbf{More trees do not cause overfitting}: they only cost more computation.
+    \item The price is \textbf{interpretability}: a hundred trees cannot be read like a single small one.
+\end{itemize}
+
 \subsection{k-Nearest Neighbors}
-\textbf{k-NN} can be used to perform both supervised regression and classification tasks. It has the following properties:
+\textbf{In one sentence:} k-NN does not learn anything: to classify a new flow, it finds the $k$ most similar flows in the training set and copies their answer. ``Tell me who your friends are, and I will tell you who you are.''
+
 \begin{itemize}
+    \item it is both a \textbf{classifier} and a \textbf{regressor};
     \item \textbf{DATA}: numeric features, numeric or categorical label;
-    \item \textbf{MODEL}: piecewise constant map; the hypothesis space of k-NN depends on the labelled dataset;
-    \item \textbf{LOSS}: no loss function, since nothing is optimized and there is no training.
+    \item \textbf{MODEL}: a constant answer in each region (piecewise constant maps); the regions depend on the stored training points;
+    \item \textbf{LOSS}: none: nothing is optimized, and there is no training.
 \end{itemize}
-k-NN is an \textbf{instance-based} (or lazy) learning method, since it does not construct a general internal model. It simply stores the instances of the training data, and uses the $k$ closest points to perform the classification or the regression. As a classifier, k-NN requires:
-\begin{itemize}
-    \item the set of stored records;
-    \item a distance metric to compute the distance between records, e.g. the Euclidean distance;
-    \item the value of $k$.
-\end{itemize}
+k-NN is called an \textbf{instance-based} (or \textbf{lazy}) method: instead of building a model, it simply stores the training points and uses them at prediction time. It needs three things: the stored points, a way to measure distance between points (e.g.\ the Euclidean distance) and the value of $k$.
 
 \begin{center}
 \fbox{\parbox{0.9\textwidth}{
 \textbf{Algorithm: k-NN prediction}\\
-\textbf{Input:} stored records with their labels, distance metric, $k$, unknown record $\mathbf{x}$\\
-\textbf{Output:} predicted label of $\mathbf{x}$
+\textbf{Input:} stored points with their labels, a distance, $k$, a new point\\
+\textbf{Output:} predicted label of the new point
 \begin{enumerate}
-    \item Compute the distance from $\mathbf{x}$ to every stored record.
-    \item Identify the $k$ nearest neighbors.
-    \item Classification: return the majority class of their labels. Regression: return the average of their labels.
+    \item Compute the distance from the new point to every stored point.
+    \item Keep the $k$ closest ones (the neighbours).
+    \item Classification: return the most frequent class among them. Regression: return the average of their labels.
 \end{enumerate}}}
 \end{center}
 
@@ -352,9 +557,15 @@ k-NN is an \textbf{instance-based} (or lazy) learning method, since it does not 
     \caption{Left: the class of the unknown record changes with $k$. Centre and right: decision regions with $k = 1$ and $k = 25$.}
 \end{figure}
 
-In the figure, the unknown record is classified as $+$ with $k = 1$, as $-$ with $k = 3$ (two neighbours against one) and again as $+$ with $k = 7$ (four against three). For binary problems an odd $k$ avoids ties. If $k$ is too small, the model is too sensitive to noise points, hence it can lead to \textbf{overfitting}: with $k = 1$ every isolated point creates its own island. If $k$ is too large, the neighbourhood may include many points from other classes, and the boundary becomes too smooth (\textbf{underfitting}); with $k = m$ every record gets the majority class. Hence, it is recommended to perform validation in order to tune the best value of $k$. For regression, k-NN averages the labels of the $k$ neighbours, and its prediction is again piecewise constant (right panel of the piecewise constant figure above).
+\paragraph{Choosing $k$.} In the figure, the unknown point is classified as $+$ with $k = 1$, as $-$ with $k = 3$ (two neighbours against one) and again as $+$ with $k = 7$ (four against three). So $k$ matters:
+\begin{itemize}
+    \item \textbf{$k$ too small $\rightarrow$ overfitting}: the model follows noise; with $k = 1$ every isolated point creates its own island;
+    \item \textbf{$k$ too large $\rightarrow$ underfitting}: the neighbourhood includes many points of other classes and the boundary becomes too smooth; with $k$ equal to the number of training points, every new point gets the majority class;
+    \item for binary problems an \textbf{odd} $k$ avoids ties. The best $k$ is chosen with validation.
+\end{itemize}
+For regression, k-NN averages the labels of the $k$ neighbours, and its prediction is again a staircase (see the piecewise constant figure above).
 
-Lastly, before applying k-NN the attribute domains should be \textbf{normalized}, to prevent the distance from being dominated by one of the attributes. Two flows that differ by 30 s in duration and by 100\,000 bytes have a Euclidean distance of about 100\,000: the duration does not count at all, and the neighbours are chosen only by the number of bytes.
+\paragraph{Normalize the features first.} Before using k-NN the features must be normalized, otherwise the distance is decided by the feature with the largest numbers. Two flows that differ by 30 s in duration and by 100\,000 bytes are at a distance of about 100\,000: the duration does not count at all, and the neighbours are chosen only by the number of bytes.
 
 \begin{figure}[h]
     \centering
@@ -362,10 +573,10 @@ Lastly, before applying k-NN the attribute domains should be \textbf{normalized}
     \caption{The 10 nearest neighbours of a new flow, with raw features (left) and standardized features (right).}
 \end{figure}
 
-k-NN has no training phase, but its predictions are slow: for each new record it computes the distance to \emph{all} the $m$ stored records, i.e. about $m \cdot n$ operations, whatever the value of $k$. With one million stored flows and 20 features, that is 20 million operations per prediction. It is also not very scalable, since it needs to store all the data points in memory.\footnote{Correction: the previous version said that k-NN ``is slow if k is really high''. The cost of a prediction is dominated by the distances to all the $m$ stored records, which must be computed for any $k$; choosing the $k$ smallest adds little.}
+\paragraph{The cost.} k-NN has no training phase, but its predictions are slow: for each new point it computes the distance to \emph{all} the stored points, whatever the value of $k$. With one million stored flows and 20 features, that is about 20 million operations for every single prediction. It also needs to keep all the training points in memory, so it does not scale well to very large datasets.
 
 \subsection{Comparison}
-The figure below applies six of the techniques to the same two-dimensional problem: two interleaved classes, as normal and anomalous traffic can be in a feature space, with 280 training and 120 test points.
+The next figure applies six of these techniques to the same two-dimensional problem: two interleaved classes, as normal and anomalous traffic can be in a feature space, with 280 training points and 120 test points.
 
 \begin{figure}[h]
     \centering
@@ -373,46 +584,92 @@ The figure below applies six of the techniques to the same two-dimensional probl
     \caption{Decision regions of six classifiers on the same data, with training and test accuracy.}
 \end{figure}
 
-The linear methods (logistic regression, SVM and, almost, Naive Bayes) draw a straight line and reach a test accuracy of $0.87$--$0.88$. The decision tree grown without limits is perfect on the training set ($1.00$) but has the lowest test accuracy ($0.82$): it overfits with many small rectangles. The random forest smooths these rectangles and raises the test accuracy to $0.88$, and k-NN with $k = 15$ follows the curved shape of the classes. With 120 test points one error changes the accuracy by about $0.008$, so differences of $0.01$ should not be over-interpreted.
+\begin{itemize}
+    \item The \textbf{linear methods} (logistic regression, SVM and, almost, Naive Bayes) draw a straight line and reach a test accuracy of $0.87$--$0.88$.
+    \item The \textbf{decision tree} grown without limits is perfect on the training set ($1.00$) but has the lowest test accuracy ($0.82$): it overfits with many small rectangles.
+    \item The \textbf{random forest} smooths these rectangles and raises the test accuracy to $0.88$.
+    \item \textbf{k-NN} with $k = 15$ follows the curved shape of the classes.
+\end{itemize}
+With 120 test points one error changes the accuracy by about $0.008$, so differences of $0.01$ should not be over-interpreted.
 
 \begin{center}
     \begin{tabular}{l|l|l|l}
         \textbf{Method} & \textbf{Task} & \textbf{Model} & \textbf{Loss} \\ \hline
-        Linear regression   & R    & linear maps        & squared error \\
-        LASSO               & R    & linear maps        & squared error $+\ \lambda\|\mathbf{w}\|_1$ \\
-        Logistic regression & C    & linear maps        & logistic loss \\
-        SVM                 & C    & linear maps        & hinge loss $+\ \lambda\|\mathbf{w}\|_2^2$ \\
-        Naive Bayes         & C    & linear maps        & 0/1 loss (Bayes' rule) \\
-        Decision tree       & R, C & piecewise constant & impurity, greedy \\
+        Linear regression   & R    & straight line      & squared error \\
+        LASSO               & R    & straight line      & squared error $+$ penalty (sum of $|w|$) \\
+        Logistic regression & C    & straight line      & logistic loss \\
+        SVM                 & C    & straight line      & hinge loss $+$ penalty (sum of $w^2$) \\
+        Naive Bayes         & C    & straight line      & 0/1 loss (Bayes' rule) \\
+        Decision tree       & R, C & staircase          & impurity, greedy \\
         Random forest       & R, C & vote of trees      & impurity, per tree \\
-        k-NN                & R, C & piecewise constant & none \\
+        k-NN                & R, C & staircase          & none \\
     \end{tabular}
 \end{center}
 (R = regression, C = classification.)
 
+\paragraph{When to use what.}
+\begin{center}
+    \begin{tabular}{l|l}
+        \textbf{Situation} & \textbf{Method} \\ \hline
+        Many features, few really useful          & LASSO \\
+        Classes separable by a straight line      & SVM, logistic regression \\
+        Little data, need something fast          & Naive Bayes \\
+        The decision must be explained            & a shallow decision tree \\
+        High accuracy on tabular data             & random forest \\
+        Irregular boundary, few data and features & k-NN \\
+        Huge datasets, continuous updates         & models trained with SGD \\
+    \end{tabular}
+\end{center}
+
 \section{Summary}
 \begin{itemize}
-    \item \textbf{Gradient descent} minimizes the empirical risk by repeated steps $\mathbf{w}^{(r+1)} = \mathbf{w}^{(r)} - \alpha\nabla f(\mathbf{w}^{(r)})$, against the gradient.
-    \item The \textbf{learning rate} must be neither too small (slow) nor too large (divergence); standardized features need fewer steps. GD stops after a fixed number of epochs, when the risk stops improving, or when the validation error stops decreasing (early stopping).
-    \item \textbf{SGD} estimates the gradient on one random point or on a random batch: cheap, noisy steps, suited to large datasets.
-    \item \textbf{Multi-class}: one-vs-rest (one binary problem per class) or softmax with cross-entropy loss. \textbf{Multi-label}: one problem per label, or one class per combination of labels.
-    \item \textbf{LASSO}: linear regression with an L1 penalty that sets weights to zero (feature selection). \textbf{SVM}: linear classifier with the maximum margin (regularized hinge loss). \textbf{Naive Bayes}: Bayes classifier with independent Gaussian features.
-    \item \textbf{Decision trees}: sequences of tests on single features, learnt greedily; \textbf{random forests}: many trees on random subsets, combined by voting; \textbf{k-NN}: vote of the $k$ nearest stored records, with normalized features.
+    \item \textbf{Gradient descent} trains a model by repeated small steps against the gradient: new weights = current weights $-$ learning rate $\times$ gradient. The steps get shorter near the minimum.
+    \item The \textbf{learning rate} must be neither too small (slow) nor too large (the method jumps over the minimum and can diverge). Standardized features make the descent much faster. GD stops after a fixed number of epochs, when the error stops improving, or when the validation error starts to grow (\textbf{early stopping}).
+    \item \textbf{SGD} and \textbf{mini-batch SGD} estimate the gradient on one random point or on a small random batch: cheaper, noisier steps, suited to large datasets.
+    \item \textbf{Multi-class} (one label, many values): one-vs-rest, or softmax with the cross-entropy loss. \textbf{Multi-label} (several labels): one classifier per label, or one class per combination of labels.
+    \item \textbf{LASSO}: linear regression with a penalty that sets useless weights to exactly zero (feature selection). \textbf{SVM}: the separating line with the widest margin. \textbf{Naive Bayes}: the most probable class, assuming independent features; training is just counting.
+    \item \textbf{Decision tree}: yes/no questions on one feature at a time, built greedily; prone to overfitting. \textbf{Random forest}: many trees on random subsets that vote; more trees never cause overfitting. \textbf{k-NN}: vote of the $k$ nearest stored points; no training, slow predictions, features must be normalized.
 \end{itemize}
 
 
 
 \section{A prova di coglione}
-Questo capitolo ha due anime. La prima risponde alla domanda ``come si minimizza davvero il rischio empirico?'': scendendo a piccoli passi, con il gradient descent. La seconda è un catalogo dei metodi supervisionati più usati, ognuno descritto con la solita ricetta dell'ERM (dati, modello, loss): conoscere bene quella ricetta vuol dire avere già metà del capitolo in tasca.
+Questo capitolo ha due parti.
+\begin{itemize}
+    \item La prima risponde a una domanda: \emph{come si allena davvero un modello?} Scendendo a piccoli passi lungo la ``valle'' dell'errore, con il gradient descent.
+    \item La seconda è un catalogo dei metodi supervisionati più usati. Ognuno si descrive con la solita ricetta dell'ERM: \textbf{dati} (cosa accetta), \textbf{modello} (che forma ha la previsione) e \textbf{loss} (cosa cerca di minimizzare). Se conosci bene la ricetta, hai già metà del capitolo in tasca.
+\end{itemize}
 
 \subsection{Gradient descent: scendere a piccoli passi}
-\paragraph*{L'idea.} Sei in montagna nella nebbia e vuoi arrivare a valle. La valle non la vedi, ma senti la pendenza sotto i piedi: fai un passo in discesa, poi un altro, finché il terreno non diventa piatto.
+\paragraph*{L'idea.} Sei in montagna nella nebbia e vuoi arrivare a valle. La valle non la vedi, ma senti sotto i piedi da che parte scende il terreno. Fai un passo in discesa, poi un altro, finché il terreno non diventa piatto.
 
-Il gradiente è la pendenza e punta in \emph{salita}, quindi ci si muove dalla parte opposta: $\mathbf{w} \leftarrow \mathbf{w} - \alpha\nabla f(\mathbf{w})$. Il learning rate $\alpha$ è la lunghezza del passo. Troppo piccolo e non arrivi mai, troppo grande e salti da un versante all'altro della valle fino a scappare via. Su $f(w) = w^2$, partendo da $w = -4$: con $\alpha = 0.35$ ogni passo moltiplica $w$ per $0.3$ e in pochi passi sei al minimo; con $\alpha = 1.05$ lo moltiplica per $-1.1$ e diverge. Standardizzare le feature rende la valle più rotonda: nell'esempio del capitolo bastano 5 passi invece di 39.
+\paragraph*{La valle.} Ogni scelta dei pesi dà un certo errore medio sul training set. Se metti in fila tutte le scelte possibili ottieni una valle: in alto i pesi pessimi, in fondo quelli migliori. Allenare il modello vuol dire arrivare in fondo.
 
-Ci si ferma dopo un numero fisso di epoche, quando il rischio empirico smette di migliorare, oppure quando il \emph{validation} error smette di scendere (early stopping). Nell'esempio il punto giusto è l'epoca 64: continuare porta il validation error da $0.73$ a $30$, perché il modello impara il rumore.
+\paragraph*{Il gradiente è la pendenza.} Con un solo peso conta il segno:
+\begin{itemize}
+    \item pendenza \textbf{negativa}: andando a destra l'errore scende, quindi vai a destra;
+    \item pendenza \textbf{positiva}: andando a sinistra l'errore scende, quindi vai a sinistra;
+    \item pendenza \textbf{zero}: sei in fondo, ti fermi.
+\end{itemize}
+Con tanti pesi il gradiente è una freccia che punta in \textbf{salita}, e più è lunga più il terreno è ripido.
 
-Con milioni di dati, calcolare il gradiente esatto a ogni passo costa troppo. La \textbf{SGD} lo stima con la media su un solo punto, o su un piccolo batch, preso a caso. È come chiedere la strada a pochi passanti invece che a tutta la città: la risposta è più rumorosa, ma arriva subito. Con lo stesso lavoro di un solo passo di GD, nell'esempio la SGD è già a $0.42$ (minimo $0.40$), mentre il GD è ancora a $7.91$.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/slope_sign.png}
+    \caption{Il segno della pendenza dice da che parte andare: a destra, a sinistra, oppure fermarsi perché si è in fondo.}
+\end{figure}
+
+\paragraph*{Il passo.} Siccome il gradiente punta in salita, ci si muove dalla parte opposta. A parole: \emph{nuovi pesi = pesi attuali meno learning rate per gradiente}. Il ``meno'' gira la freccia verso la discesa. Vicino al fondo la pendenza è quasi zero, quindi i passi si accorciano da soli.
+
+\paragraph*{Il learning rate} è la lunghezza del passo. Sull'esempio del libro (l'errore è $w^2$, si parte da $w = -4$, 5 passi). Con 0.35 ogni passo moltiplica $w$ per 0.3; con 1.05 lo moltiplica per $-1.1$, quindi $w$ cambia lato e cresce.
+\begin{center}
+    \begin{tabular}{l|l|c}
+        \textbf{Learning rate} & \textbf{Cosa succede} & \textbf{Errore dopo 5 passi} \\ \hline
+        0.05, troppo piccolo & passi minuscoli, si avanza piano & 5.58 \\
+        0.35, giusto & arriva in fondo in pochi passi & circa 0 \\
+        1.05, troppo grande & salta da un lato all'altro: \textbf{diverge} & 41.5 \\
+    \end{tabular}
+\end{center}
 
 \begin{figure}[h]
     \centering
@@ -420,30 +677,67 @@ Con milioni di dati, calcolare il gradiente esatto a ogni passo costa troppo. La
     \caption{Cinque passi di gradient descent su $f(w) = w^2$: learning rate troppo piccolo, giusto, troppo grande.}
 \end{figure}
 
+\paragraph*{Standardizzare aiuta.} Se una feature è in byte e un'altra in secondi, la valle diventa un canalone lungo e stretto, e si scende a zig-zag. Con le feature standardizzate la valle è rotonda e si scende quasi dritti: nell'esempio del capitolo bastano 5 passi invece di 39.
+
+\paragraph*{Quando fermarsi.} Tre modi:
+\begin{enumerate}
+    \item dopo un numero fisso di \textbf{epoche} (un'epoca = un passaggio su tutto il training set);
+    \item quando l'errore sul training smette di migliorare;
+    \item quando l'errore sul \textbf{validation set} smette di scendere e comincia a salire (\textbf{early stopping}). Nell'esempio il punto giusto è l'epoca 64: andando avanti, il validation error passa da $0.73$ a $30.5$, perché il modello impara a memoria il rumore.
+\end{enumerate}
+
+\paragraph*{SGD.} Ogni passo del gradient descent normale guarda \emph{tutti} i dati, e con milioni di flussi costa troppo. La \textbf{SGD} stima la pendenza su un solo punto preso a caso; la \textbf{mini-batch SGD} su un piccolo gruppo (batch). È come chiedere la strada a pochi passanti invece che a tutta la città: la risposta è più rumorosa, ma arriva subito. Con lo stesso lavoro di \emph{un} passo di GD la SGD ne fa 200: nell'esempio è già a $0.42$ (il minimo è $0.40$), mentre il GD è ancora a $7.91$.
+
 \subsection{Più di due classi}
-\paragraph*{L'idea.} Con più classi ci sono due strade: spezzare il problema in tanti problemi binari, oppure trasformare i punteggi in probabilità.
+\paragraph*{Prima di tutto, non confondere:}
+\begin{itemize}
+    \item \textbf{multi-class}: \emph{un'etichetta}, con più di due valori possibili (web \emph{oppure} video \emph{oppure} VoIP);
+    \item \textbf{multi-label}: \emph{più etichette} insieme (l'applicazione \emph{e} se è cifrato o no).
+\end{itemize}
 
-Il \textbf{one-vs-rest} addestra un classificatore per classe (``è web o no?'', ``è video o no?'', ``è VoIP o no?'') e sceglie la classe con il punteggio più alto. La \textbf{softmax} dà un punteggio a ogni classe e lo trasforma in una probabilità, con somma 1; la loss è $-\log$ della probabilità data alla classe vera. Esempio: i punteggi $2$, $1$, $-1$ diventano $0.71$, $0.26$, $0.04$. Se la classe vera è web la loss è $0.35$; se è VoIP è $3.35$, perché il modello era sicuro e ha sbagliato.
+\paragraph*{Multi-class: due strade.}
+\begin{itemize}
+    \item \textbf{One-vs-rest}: un classificatore sì/no per ogni classe (``è web o no?'', ``è video o no?'', ``è VoIP o no?''). Ognuno dà un punteggio, e vince la classe con il punteggio più alto.
+    \item \textbf{Softmax} (logistic regression): un punteggio per classe, trasformato in una \textbf{probabilità}, con somma 1. Esempio: i punteggi $2$, $1$, $-1$ diventano $0.71$, $0.26$ e $0.035$.
+\end{itemize}
 
-Il \textbf{multi-label} è un'altra cosa: lo stesso dato ha più etichette, per esempio applicazione e cifrato sì/no. Si può addestrare un classificatore per ogni etichetta, oppure creare una classe per ogni combinazione ($3 \times 2 = 6$ classi).
+\paragraph*{La loss della softmax (cross-entropy)} guarda solo la probabilità data alla classe \textbf{vera}: se era alta, la loss è piccola; se era bassissima, la loss è grande. Nell'esempio: classe vera web, probabilità $0.71$, loss $0.35$; classe vera VoIP, probabilità $0.035$, loss $3.35$, perché il modello era sicuro e ha sbagliato.
+
+\paragraph*{Multi-label: due strade.}
+\begin{itemize}
+    \item \textbf{Naive}: un classificatore per ogni etichetta. Semplice, ma ignora i legami tra le etichette.
+    \item \textbf{Combinazioni}: ogni combinazione diventa una classe ($3 \times 2 = 6$ classi). Cattura i legami, ma le classi crescono in fretta e alcune hanno pochissimi esempi.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{images/chapter_9/combination_approach.png}
+    \caption{Multi-label: a sinistra un classificatore per etichetta, a destra un classificatore con una classe per ogni combinazione.}
+\end{figure}
 
 \subsection{I metodi lineari: LASSO, SVM, Naive Bayes}
-\paragraph*{L'idea.} Tre metodi con lo stesso modello, una retta (o un iperpiano), ma con un'idea diversa di ``retta migliore''.
+\paragraph*{L'idea.} Tre metodi con lo stesso modello, una retta (o un iperpiano), ma ognuno con un'idea diversa di ``retta migliore''.
 
-\textbf{LASSO} è la regressione lineare con una multa $\lambda$ sulla somma dei $|w_j|$. La multa spinge a zero i pesi delle feature inutili: è una selezione automatica delle feature, e funziona anche quando ci sono più feature che dati. Nell'esempio sul throughput TCP, con il $\lambda$ scelto in cross validation 4 pesi su 10 diventano esattamente zero, e le 3 feature importanti (RTT, loss rate, utilizzo del link) restano quelle con i pesi più grandi.
+\paragraph*{LASSO} (regressione). È la regressione lineare con una \textbf{multa} su ogni feature usata: la loss è errore al quadrato più la somma dei pesi in valore assoluto, moltiplicata per $\lambda$. Più alzi $\lambda$, più pesi diventano \textbf{esattamente zero}: è una selezione automatica delle feature, e funziona anche quando ci sono più feature che dati. Nell'esempio sul throughput TCP, con il $\lambda$ scelto in cross validation 4 pesi su 10 vanno a zero, e le 3 feature importanti (RTT, loss rate, utilizzo del link) restano quelle con i pesi più grandi.
 
-La \textbf{SVM}, tra tutte le rette che separano le classi, sceglie quella con il margine più largo, la più lontana dai punti più vicini: è la strada più larga che si riesce a far passare tra le due classi. Con $\lambda$ più grande la strada si allarga, ma qualche punto può finirci dentro.
+\paragraph*{SVM} (classificazione). Tra tutte le rette che separano le classi, sceglie quella con il \textbf{margine} più largo: la strada più larga che si riesce a far passare tra i due gruppi. Con $\lambda$ più grande la strada si allarga, ma qualche punto può finirci dentro (soft margin). In scikit-learn si usa $C$, che funziona al contrario: $C$ grande vuol dire margine stretto.
 
-Il \textbf{Naive Bayes} non ottimizza niente. Stima dai dati quanto è frequente ogni classe e, per ogni feature, una gaussiana per classe; poi sceglie la classe più probabile. È ``naive'' perché fa finta che le feature siano indipendenti. Esempio: normale vale $0.7 \cdot 0.05 \cdot 0.30 = 0.0105$, malevolo vale $0.3 \cdot 0.40 \cdot 0.20 = 0.024$, quindi il flusso è malevolo, anche se i flussi normali sono più frequenti.
+\paragraph*{Naive Bayes} (classificazione). Non ottimizza niente: conta. Per ogni classe calcola un punteggio moltiplicando quanto è comune la classe per quanto ogni feature ``somiglia'' a quella classe (una campana per feature e per classe). Vince il punteggio più alto. È ``naive'' perché fa finta che le feature siano indipendenti.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/chapter_9/naive_bayes_example.png}
+    \caption{Naive Bayes in un colpo d'occhio: normale vale $0.0105$, malevolo $0.024$, quindi il flusso è malevolo, anche se i flussi normali sono più frequenti.}
+\end{figure}
 
 \subsection{I metodi non lineari: alberi, foreste, k-NN}
 \paragraph*{L'idea.} Quando il confine tra le classi non è una retta servono modelli che dividono lo spazio in pezzi e danno una risposta costante in ogni pezzo.
 
-Il \textbf{decision tree} è una serie di domande sì/no, come nel gioco ``Indovina chi?'': ``pacchetti più grandi di 865 byte? durata oltre 61 secondi? allora è video''. È velocissimo e si legge facilmente, ma se lo lasci crescere senza limiti impara a memoria (nel confronto finale: training $1.00$, test $0.82$).
+\paragraph*{Decision tree.} Una serie di domande sì/no su una feature alla volta, come nel gioco ``Indovina chi?'' (``la dimensione media dei pacchetti è sotto una certa soglia?'', ``la durata è sotto una certa soglia?''). A ogni nodo sceglie la domanda che divide i punti nei gruppi più \textbf{puri}. È velocissimo e si legge facilmente, ma se lo lasci crescere senza limiti impara a memoria: nel confronto finale fa $1.00$ sul training e solo $0.82$ sul test.
 
-La \textbf{random forest} sono tanti alberi, ognuno addestrato su un pezzo diverso di dati e di feature, che poi votano. Un albero da solo sbaglia spesso, la maggioranza molto meno: è la saggezza della folla. Nell'esempio il test sale da $0.82$ a $0.88$.
+\paragraph*{Random forest.} Tanti alberi, ognuno addestrato su un pezzo diverso di dati e di feature, che poi votano. Un albero da solo sbaglia in modo instabile, la maggioranza molto meno: è la saggezza della folla (con 25 alberi giusti al 70\% e indipendenti, la maggioranza ha ragione il 98\% delle volte). Nel confronto il test sale da $0.82$ a $0.88$. Più alberi non fanno overfitting, costano solo più tempo.
 
-Il \textbf{k-NN} segue il proverbio ``dimmi con chi vai e ti dirò chi sei'': il nuovo dato prende la classe della maggioranza dei suoi $k$ vicini. Non c'è training, ma ogni previsione confronta il dato con \emph{tutti} quelli salvati. $k$ piccolo porta overfitting, $k$ grande underfitting. Le feature vanno normalizzate, altrimenti la distanza la decide solo quella con i numeri più grandi: i byte schiacciano i secondi.
+\paragraph*{k-NN.} ``Dimmi con chi vai e ti dirò chi sei'': il nuovo dato prende la classe della maggioranza dei suoi $k$ vicini. Non c'è training, ma ogni previsione confronta il dato con \emph{tutti} quelli salvati. $k$ piccolo porta overfitting, $k$ grande underfitting. Le feature vanno normalizzate, altrimenti la distanza la decide solo quella con i numeri più grandi: i byte schiacciano i secondi.
 
 \begin{figure}[h]
     \centering
@@ -469,19 +763,21 @@ Il \textbf{k-NN} segue il proverbio ``dimmi con chi vai e ti dirò chi sei'': il
 \begin{center}
     \begin{tabular}{l|l}
         \textbf{Concetto} & \textbf{In una riga} \\ \hline
-        Gradient descent  & $\mathbf{w} \leftarrow \mathbf{w} - \alpha\nabla f(\mathbf{w})$: passo contro il gradiente \\ \hline
+        Gradient descent  & nuovi pesi = pesi attuali $-$ learning rate $\times$ gradiente \\ \hline
+        Gradiente         & la pendenza: punta in salita, lunga dove è ripido \\ \hline
         Learning rate     & troppo piccolo: lento; troppo grande: diverge \\ \hline
         Standardizzazione & valle più rotonda, meno passi \\ \hline
-        Quando fermarsi   & epoche fisse, rischio fermo, early stopping \\ \hline
-        SGD               & gradiente stimato con la media su un punto o un batch \\ \hline
-        One-vs-rest       & un problema binario per classe, vince lo score più alto \\ \hline
-        Softmax           & punteggi $\rightarrow$ probabilità; loss $= -\log p(\text{classe vera})$ \\ \hline
+        Quando fermarsi   & epoche fisse, errore fermo, early stopping \\ \hline
+        SGD               & pendenza stimata su un punto o un batch a caso \\ \hline
+        One-vs-rest       & un problema sì/no per classe, vince il punteggio più alto \\ \hline
+        Softmax           & punteggi $\rightarrow$ probabilità con somma 1 \\ \hline
+        Cross-entropy     & piccola se la classe vera era probabile, enorme se no \\ \hline
         Multi-label       & un modello per etichetta, o una classe per combinazione \\ \hline
-        LASSO             & squared loss $+\ \lambda\|\mathbf{w}\|_1$: pesi a zero, selezione feature \\ \hline
-        SVM               & hinge loss $+\ \lambda\|\mathbf{w}\|_2^2$: margine massimo \\ \hline
-        Naive Bayes       & classe con $p(\mathbf{x}|y)\,p(y)$ massimo, feature indipendenti \\ \hline
+        LASSO             & errore $+$ multa sui pesi: i pesi inutili vanno a zero \\ \hline
+        SVM               & retta con il margine più largo; $C$ grande = margine stretto \\ \hline
+        Naive Bayes       & classe più probabile, feature indipendenti; niente ottimizzazione \\ \hline
         Decision tree     & domande su una feature alla volta, costruzione greedy \\ \hline
-        Random forest     & $K$ alberi su dati e feature diversi, voto di maggioranza \\ \hline
+        Random forest     & tanti alberi su dati e feature diversi, voto di maggioranza \\ \hline
         k-NN              & voto dei $k$ vicini; niente training, feature normalizzate \\
     \end{tabular}
 \end{center}
